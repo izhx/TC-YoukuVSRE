@@ -1,0 +1,9 @@
+# vscode
+.vscode
+
+# idea
+.idea
+
+# python
+*.py[co]
+__pycache__/
