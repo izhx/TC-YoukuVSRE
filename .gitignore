@@ -1,3 +1,6 @@
+# data
+*.y4m
+
 # vscode
 .vscode
 
