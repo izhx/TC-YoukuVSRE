@@ -40,8 +40,8 @@ class YoukuDataset(data.Dataset):
         self.transform = transform
         self.l_frames, self.l_meta = read_y4m(path_prefix + "_l.y4m")
         self.gt_frames, self.gt_meta = read_y4m(path_prefix + "_h_GT.y4m")
-        self.frame_num = len(self.l_frames)
-        if self.frame_num != len(self.gt_frames):
+        self.nFrames = len(self.l_frames)
+        if self.nFrames != len(self.gt_frames):
             raise Error("The frame number of LR and GT aren't equal!")
         return
 
@@ -50,7 +50,7 @@ class YoukuDataset(data.Dataset):
 
         if self.patch_size != 0:
             lr, gt, neighbor, _ = get_patch(lr, gt, neighbor, self.patch_size,
-                                            self.upscale_factor, self.frame_num)
+                                            self.upscale_factor, self.nFrames)
 
         if self.augmentation:
             lr, gt, neighbor, _ = augment(lr, gt, neighbor)
@@ -73,7 +73,7 @@ class YoukuDataset(data.Dataset):
         return lr, gt, neighbor, flow, bicubic
 
     def __len__(self):
-        return self.frame_num
+        return self.nFrames
 
     def __add__(self, other):  # todo
         return data.dataset.ConcatDataset([self, other])
@@ -82,10 +82,10 @@ class YoukuDataset(data.Dataset):
         gt = Image.fromarray(self.gt_frames[index], mode='YCbCr').convert('RGB')
         lr = Image.fromarray(self.l_frames[index], mode='YCbCr').convert('RGB')
         if future:
-            tt = int(self.frame_num / 2)
+            tt = int(self.nFrames / 2)
             seq = [x for x in range(4 - tt, 5 + tt) if x != 4]
         else:
-            seq = [i for i in range(self.frame_num)]
+            seq = [i for i in range(self.nFrames)]
             seq.reverse()
         neighbor = [Image.fromarray(self.l_frames[i]) for i in seq]
         return lr, gt, neighbor
@@ -178,7 +178,7 @@ def mod_crop(img, modulo):
 
 def get_patch(img_in, img_tar, img_nn, patch_size, scale, n_frames, ix=-1, iy=-1):
     (ih, iw) = img_in.size
-    (th, tw) = (scale * ih, scale * iw)
+    # (th, tw) = (scale * ih, scale * iw)
 
     patch_mult = scale  # if len(scale) > 1 else 1
     tp = patch_mult * patch_size

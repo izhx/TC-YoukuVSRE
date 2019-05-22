@@ -9,7 +9,7 @@ import torch.optim as optim
 import torch.backends.cudnn as cudnn
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
-from rbpn import Net as RBPN
+from rbpn import RBPN as RBPN
 from data import get_training_set, get_eval_set
 import pdb
 import socket

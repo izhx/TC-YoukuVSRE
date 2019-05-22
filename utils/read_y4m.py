@@ -1,5 +1,7 @@
 import gc
 import numpy as np
+
+
 # from PIL import Image, ImageOps
 
 
@@ -20,8 +22,7 @@ def read_y4m(file_path):
 
     width = int(meta_data['width'][1:])
     height = int(meta_data['height'][1:])
-    uvw = width >> 1
-    uvh = height >> 1
+    uvw, uvh = width >> 1, height >> 1
     n_pixel = height * width
     yuv_frames = [np.frombuffer(frame, dtype=np.uint8) for frame in raw_frames]
     start_y, end_y = (0, n_pixel)
