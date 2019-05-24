@@ -53,8 +53,13 @@ def read_y4m(file_path):
 
 
 def convert(data_dir):
+    """
+    对文件夹目录下所有y4m文件分帧按文件夹存放。
+    每个视频文件夹内有file list，总目录下也记录了总的。
+
+    :param data_dir: data dir
+    """
     t0 = time.time()
-    total_file_list = list()
     open(os.path.join(data_dir, "all_file_list.txt"), 'w').close()
     videos = [v for v in os.listdir(data_dir) if v.endswith('y4m')]
     print("There are", len(videos), "y4m videos in ", data_dir)
@@ -67,7 +72,7 @@ def convert(data_dir):
         if not os.path.exists(im_dir):
             os.makedirs(im_dir)
         fid_len = len(str(len(frames) - 1))
-        # save meta, frame
+        # save frame, todo(@izhx): also save meta?
         names = list()
         paths = list()
         for n, f in enumerate(frames):
