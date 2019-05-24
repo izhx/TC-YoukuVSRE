@@ -1,7 +1,7 @@
 # import sys
 # pycharm 不需要这操作
 # sys.path.append("../../")
-from utils.read_y4m import read_y4m
+from utils.y4m_tools import read_y4m
 
 import random
 import numpy as np

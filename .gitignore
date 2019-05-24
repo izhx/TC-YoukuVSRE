@@ -3,6 +3,7 @@
 
 # data
 *.y4m
+*.npy
 
 # vscode
 .vscode

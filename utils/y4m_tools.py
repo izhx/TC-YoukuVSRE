@@ -1,4 +1,6 @@
 import gc
+import os
+import time
 import numpy as np
 
 
@@ -48,3 +50,42 @@ def read_y4m(file_path):
     del header, raw_frames, yuv_frames
     gc.collect()
     return np.array(frames), meta_data
+
+
+def convert(data_dir):
+    t0 = time.time()
+    total_file_list = list()
+    open(os.path.join(data_dir, "all_file_list.txt"), 'w').close()
+    videos = [v for v in os.listdir(data_dir) if v.endswith('y4m')]
+    print("There are", len(videos), "y4m videos in ", data_dir)
+    for i, v in enumerate(videos, 1):
+        vid = v[6:13]
+        print("\rProcessing " + f"{vid}.  {i / len(videos):.2%}", end="")
+        v_path = f"{data_dir}/{v}"
+        frames, meta = read_y4m(v_path)
+        im_dir = v_path[:-4]  # 分帧存放文件夹
+        if not os.path.exists(im_dir):
+            os.makedirs(im_dir)
+        fid_len = len(str(len(frames) - 1))
+        # save meta, frame
+        names = list()
+        paths = list()
+        for n, f in enumerate(frames):
+            img_name = f"{vid}_{str(n).zfill(fid_len)}.npy"
+            img_path = f"{im_dir}/{img_name}"
+            np.save(img_path, f)
+            names.append(img_name + '\n')
+            paths.append(img_path[len(data_dir) + 1:] + '\n')
+        with open(os.path.join(im_dir, "file_list.txt"), 'w') as f:
+            f.writelines(names)
+        with open(os.path.join(data_dir, "all_file_list.txt"), 'a+') as af:
+            af.writelines(paths)
+    else:
+        t1 = time.time()
+        print(f"\rSuccessful converted {len(videos)} videos in {t1 - t0:.4f} sec.", end="")
+    return
+
+
+if __name__ == '__main__':
+    DIR = "../dataset/train"
+    convert(DIR)
