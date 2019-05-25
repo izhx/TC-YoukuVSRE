@@ -1,7 +1,7 @@
 import os
 import torch.nn as nn
 import torch.optim as optim
-from base_networks import *
+from .base_networks import *
 from torchvision.transforms import *
 
 

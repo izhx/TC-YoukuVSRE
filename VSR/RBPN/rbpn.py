@@ -1,6 +1,6 @@
 import torch.nn as nn
-from base_networks import *
-from dbpns import DBPN
+from .base_networks import *
+from .dbpns import DBPN
 
 
 class RBPN(nn.Module):

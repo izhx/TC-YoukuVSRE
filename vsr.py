@@ -18,7 +18,7 @@ import math
 parser = argparse.ArgumentParser(description='PyTorch Super Res Example')
 parser.add_argument('--upscale_factor', type=int, default=4, help="super resolution upscale factor")
 parser.add_argument('--testBatchSize', type=int, default=1, help='testing batch size')
-parser.add_argument('--gpu_mode', type=bool, default=False)
+parser.add_argument('--gpu_mode', type=bool, default=True)
 parser.add_argument('--chop_forward', type=bool, default=False)
 parser.add_argument('--threads', type=int, default=0, help='number of threads for data loader to use')
 parser.add_argument('--seed', type=int, default=123, help='random seed to use. Default=123')
@@ -38,7 +38,7 @@ opt = parser.parse_args()
 gpu_list = range(opt.gpus)
 print(opt)
 
-_PREFIX = 'dataset/Youku_00000'
+_PREFIX = 'dataset/train/Youku_00000'
 
 cuda = opt.gpu_mode
 if cuda and not torch.cuda.is_available():
@@ -114,7 +114,7 @@ def eval_fun():
         t1 = time.time()
         print("===> Processing: %s || Timer: %.4f sec." % (str(count), (t1 - t0)))
         save_img(prediction.cpu().data, str(count), True)
-        # save_img(target, str(count), False)
+        save_img(target, str(count), False)
 
         # prediction=prediction.cpu()
         # prediction = prediction.data[0].numpy().astype(np.float32)
@@ -208,6 +208,7 @@ def main():  # for test
     return
 
 
-eval_fun()  # Eval Start!!!!
-# if __name__ == '__main__':
+# Eval Start!!!!
+if __name__ == '__main__':
 # main()
+    eval_fun()

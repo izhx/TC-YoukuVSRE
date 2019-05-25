@@ -9,7 +9,7 @@ import torch
 import torch.utils.data as data
 from torchvision.transforms import Compose, ToTensor
 from PIL import Image, ImageOps
-import pyflow
+from .pyflow import pyflow
 
 _TRANSFORM = Compose([ToTensor(), ])
 
@@ -40,9 +40,7 @@ class YoukuDataset(data.Dataset):
         self.transform = transform
         self.l_frames, self.l_meta = read_y4m(path_prefix + "_l.y4m")
         self.gt_frames, self.gt_meta = read_y4m(path_prefix + "_h_GT.y4m")
-        self.nFrames = len(self.l_frames)
-        if self.nFrames != len(self.gt_frames):
-            raise Error("The frame number of LR and GT aren't equal!")
+        self.nFrames = 7
         return
 
     def __getitem__(self, index):
