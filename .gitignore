@@ -1,9 +1,14 @@
+# log
+*.log
+
 # weight
 *.pth
 
 # data
+dataset/
 *.y4m
 *.npy
+*.png
 
 # vscode
 .vscode
