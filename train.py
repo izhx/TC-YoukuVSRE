@@ -96,7 +96,8 @@ def checkpoint(epoch_now):
 print('===> Loading dataset')
 train_set = YoukuDataset(opt.data_dir, opt.upscale_factor, opt.nFrames,
                          opt.data_augmentation, opt.path_size, opt.padding)
-training_data_loader = DataLoader(dataset=train_set, num_workers=opt.threads, batch_size=opt.batchSize, shuffle=True)
+training_data_loader = DataLoader(dataset=train_set, num_workers=opt.threads,
+                                  batch_size=opt.batchSize, shuffle=True)
 
 print('===> Building model ', opt.model_type)
 if opt.model_type == 'EDVR':
@@ -116,7 +117,6 @@ criterion = CharbonnierLoss()
 if opt.pretrained:
     model_name = os.path.join(opt.save_folder + opt.pretrained_sr)
     if os.path.exists(model_name):
-        # model= torch.load(model_name, map_location=lambda storage, loc: storage)
         model.load_state_dict(torch.load(model_name, map_location=lambda storage, loc: storage))
         print('Pre-trained SR model is loaded.')
 
@@ -138,3 +138,13 @@ for epoch in range(opt.start_epoch, opt.nEpochs + 1):
 
     if (epoch + 1) % opt.snapshots == 0:
         checkpoint(epoch)
+
+"""
+需要调节的：
+- padding
+- nFrames
+- lr 的更新
+- batch size
+- patch size
+- data augmentation 何时增强数据
+"""
