@@ -8,9 +8,6 @@ import torch.utils.data as data
 from PIL import Image, ImageOps
 
 
-# import pyflow
-
-
 class YoukuDataset(data.Dataset):
     def __init__(self, data_dir, upscale_factor, nFrames, augmentation, patch_size, padding):
         super(YoukuDataset, self).__init__()
@@ -28,17 +25,20 @@ class YoukuDataset(data.Dataset):
     def __getitem__(self, index):
         ref = self.imgs[index]
         gt_path = f"{self.data_dir}/{ref[:13]}/{ref}".replace('_l', '_h_GT')
+        hr = read_npy(gt_path)
         files = self.generate_names(ref, self.padding)
         imgs = [read_npy(f"{self.data_dir}/{f[:13]}/{f}") for f in files]
-        lr_seq = np.stack(imgs, axis=0)
-        lr_seq = torch.from_numpy(np.ascontiguousarray(np.transpose(lr_seq, (0, 3, 1, 2)))).float()
-        # if self.patch_size != 0:
-        #     lr, gt, neighbor, _ = get_patch(ref, gt, lr_seq, self.patch_size,
-        #                                     self.upscale_factor, self.nFrames)
-        #
-        # if self.augmentation:
-        #     lr, gt, neighbor, _ = augment(lr, gt, neighbor)
-        return lr_seq, gt_path
+
+        if self.patch_size != 0:
+            imgs, hr, _ = get_patch(imgs, hr, self.patch_size, self.upscale_factor)
+
+        if self.augmentation:
+            imgs, hr, _ = augment(imgs, hr)
+
+        lr_seq = np.stack(imgs, axis=0)  # todo gt待检验形状
+        lr_seq = torch.from_numpy(np.ascontiguousarray(lr_seq.transpose((0, 3, 1, 2)))).float()
+        gt = torch.from_numpy(np.ascontiguousarray(np.transpose(hr, (2, 0, 1)))).float()
+        return lr_seq, gt
 
     def __len__(self):
         return len(self.imgs)
@@ -49,14 +49,13 @@ class YoukuDataset(data.Dataset):
     def generate_names(self, file_name, padding='reflection'):
         """
         padding: replicate | reflection | new_info | circle
-        :param crt_i: 当前帧序号
-        :param max_n: 视频帧数
-        :param N: 序列长度
+
+        :param file_name: 文件名
         :param padding: 补齐模式
-        :return: 索引序列 Youku_00000_l_100_00_.npy
+        :return: 索引序列 [Youku_00000_l_100_00_.npy, ...]
         """
         fnl = file_name.split('_')
-        max_n, crt_i = fnl[-3:-1]
+        max_n, crt_i = fnl[-3:-1]  # crt_i: 当前帧序号   max_n: 视频帧数
         id_len = len(crt_i)
         max_n, crt_i = int(max_n), int(crt_i)
         max_n = max_n - 1
@@ -98,19 +97,23 @@ def read_npy(path):
 
 
 def read_image(img_path):
-    '''read one image from img_path
+    """read one image from img_path
     Return img: HWC, BGR, [0,1], numpy
-    '''
-    img_GT = cv2.imread(img_path)
-    img = img_GT.astype(np.float32) / 255.
+    """
+    img_gt = cv2.imread(img_path)
+    img = img_gt.astype(np.float32) / 255.
     return img
 
 
 def read_seq_imgs(img_seq_path):
-    '''read a sequence of images'''
+    """
+    read a sequence of images
+    :param img_seq_path:
+    :return:
+    """
     img_path_l = sorted(glob.glob(img_seq_path + '/*'))
     img_l = [read_image(v) for v in img_path_l]
-    # stack to TCHW, RGB, [0,1], torch
+    # stack to T C H W, RGB, [0,1], torch
     imgs = np.stack(img_l, axis=0)
     imgs = imgs[:, :, :, [2, 1, 0]]
     imgs = torch.from_numpy(np.ascontiguousarray(np.transpose(imgs, (0, 3, 1, 2)))).float()
@@ -136,12 +139,9 @@ def mod_crop(img, modulo):
     return img
 
 
-def get_patch(img_in, img_tar, img_nn, patch_size, scale, n_frames, ix=-1, iy=-1):
-    (ih, iw) = img_in.size
-    # (th, tw) = (scale * ih, scale * iw)
-
-    patch_mult = scale  # if len(scale) > 1 else 1
-    tp = patch_mult * patch_size
+def get_patch(hr, lr_seq, patch_size, scale, ix=-1, iy=-1):
+    (ih, iw) = lr_seq[0].size
+    tp = scale * patch_size
     ip = tp // scale
 
     if ix == -1:
@@ -151,35 +151,31 @@ def get_patch(img_in, img_tar, img_nn, patch_size, scale, n_frames, ix=-1, iy=-1
 
     (tx, ty) = (scale * ix, scale * iy)
 
-    img_in = img_in.crop((iy, ix, iy + ip, ix + ip))  # [:, iy:iy + ip, ix:ix + ip]
-    img_tar = img_tar.crop((ty, tx, ty + tp, tx + tp))  # [:, ty:ty + tp, tx:tx + tp]
-    img_nn = [j.crop((iy, ix, iy + ip, ix + ip)) for j in img_nn]  # [:, iy:iy + ip, ix:ix + ip]
+    hr = hr.crop((ty, tx, ty + tp, tx + tp))  # [:, ty:ty + tp, tx:tx + tp]
+    lr_seq = [j.crop((iy, ix, iy + ip, ix + ip)) for j in lr_seq]  # [:, iy:iy + ip, ix:ix + ip]
 
     info_patch = {
         'ix': ix, 'iy': iy, 'ip': ip, 'tx': tx, 'ty': ty, 'tp': tp}
 
-    return img_in, img_tar, img_nn, info_patch
+    return lr_seq, hr, info_patch
 
 
-def augment(img_in, img_tar, img_nn, flip_h=True, rot=True):
+def augment(lr_seq, hr, flip_h=True, rot=True):
     info_aug = {'flip_h': False, 'flip_v': False, 'trans': False}
 
     if random.random() < 0.5 and flip_h:
-        img_in = ImageOps.flip(img_in)
-        img_tar = ImageOps.flip(img_tar)
-        img_nn = [ImageOps.flip(j) for j in img_nn]
+        hr = ImageOps.flip(hr)
+        lr_seq = [ImageOps.flip(j) for j in lr_seq]
         info_aug['flip_h'] = True
 
     if rot:
         if random.random() < 0.5:
-            img_in = ImageOps.mirror(img_in)
-            img_tar = ImageOps.mirror(img_tar)
-            img_nn = [ImageOps.mirror(j) for j in img_nn]
+            hr = ImageOps.mirror(hr)
+            lr_seq = [ImageOps.mirror(j) for j in lr_seq]
             info_aug['flip_v'] = True
         if random.random() < 0.5:
-            img_in = img_in.rotate(180)
-            img_tar = img_tar.rotate(180)
-            img_nn = [j.rotate(180) for j in img_nn]
+            hr = hr.rotate(180)
+            lr_seq = [j.rotate(180) for j in lr_seq]
             info_aug['trans'] = True
 
-    return img_in, img_tar, img_nn, info_aug
+    return hr, lr_seq, info_aug

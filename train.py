@@ -1,7 +1,6 @@
 import os
 import time
 import argparse
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -10,7 +9,7 @@ from torch.autograd import Variable
 from torch.utils.data import DataLoader
 
 from model.EDVR_arch import EDVR
-from data.youku import YoukuDataset, read_npy
+from data.youku import YoukuDataset
 
 parser = argparse.ArgumentParser(description='PyTorch Super Res Example')
 parser.add_argument('--upscale_factor', type=int, default=4, help="super resolution upscale factor")
@@ -33,7 +32,7 @@ parser.add_argument('--padding', type=str, default="reflection",
                     help="padding: replicate | reflection | new_info | circle")
 parser.add_argument('--model_type', type=str, default='EDVR')
 parser.add_argument('--residual', type=bool, default=False)
-parser.add_argument('--pretrained_sr', default='weights/3x_dl10VDBPNF7_epoch_84.pth', help='sr pretrained base model')
+parser.add_argument('--pretrained_sr', default='weights/3x_edvr_epoch_84.pth', help='sr pretrained base model')
 parser.add_argument('--pretrained', type=bool, default=False)
 parser.add_argument('--save_folder', default='weights/', help='Location to save checkpoint models')
 
@@ -52,9 +51,9 @@ if cuda:
 print(opt)
 
 
-def single_forward(model, imgs_in):
+def single_forward(imgs_in, net):
     with torch.no_grad():
-        model_output = model(imgs_in)
+        model_output = net(imgs_in)
         if isinstance(model_output, list) or isinstance(model_output, tuple):
             output = model_output[0]
         else:
@@ -62,35 +61,34 @@ def single_forward(model, imgs_in):
     return output
 
 
-def train(epoch):
+def train(e):
     epoch_loss = 0
     model.train()
     for iteration, batch in enumerate(training_data_loader, 1):
-        lr_seq, gt_path = batch[0], batch[1]
+        lr_seq, gt = batch[0], batch[1]
         if cuda:
-            input = Variable(lr_seq).cuda(gpus_list[0])
+            lr_seq = Variable(lr_seq).cuda(gpus_list[0])
 
         optimizer.zero_grad()
         t0 = time.time()
-        prediction = single_forward(model, lr_seq)
+        prediction = single_forward(lr_seq, model)
         prediction_f = prediction.data.float().cpu().squeeze(0)
-        target = read_npy(gt_path)  # todo 不知道网络出来的啥形式
-        loss = criterion(prediction_f, target)
+        
+        loss = criterion(prediction_f, gt)
         t1 = time.time()
         epoch_loss += loss.data[0]
         loss.backward()
         optimizer.step()
 
-        print("===> Epoch[{}]({}/{}): Loss: {:.4f} || Timer: {:.4f} sec.".format(epoch, iteration,
-                                                                                 len(training_data_loader),
-                                                                                 loss.data[0], (t1 - t0)))
+        print(f"===> Epoch[{e}]({iteration}/{len(training_data_loader)}):",
+              f" Loss: {loss.data[0]:.4f} || Timer: {(t1 - t0):.4f} sec.")
 
-    print("===> Epoch {} Complete: Avg. Loss: {:.4f}".format(epoch, epoch_loss / len(training_data_loader)))
+    print(f"===> Epoch {e} Complete: Avg. Loss: {epoch_loss / len(training_data_loader):.4f}")
 
 
-def checkpoint(epoch):
+def checkpoint(epoch_now):
     model_out_path = opt.save_folder + str(
-        opt.upscale_factor) + 'x_' + opt.model_type + opt.prefix + "_epoch_{}.pth".format(epoch)
+        opt.upscale_factor) + 'x_' + opt.model_type + opt.prefix + "_epoch_{}.pth".format(epoch_now)
     torch.save(model.state_dict(), model_out_path)
     print("Checkpoint saved to {}".format(model_out_path))
 
@@ -130,13 +128,13 @@ optimizer = optim.Adam(model.parameters(), lr=opt.lr, betas=(0.9, 0.999), eps=1e
 
 for epoch in range(opt.start_epoch, opt.nEpochs + 1):
     train(epoch)
-    # test()  # todo 需加入在验证集检验，满足要求停机
+    # eval()  # todo 需加入在验证集检验，满足要求停机
 
     # todo learning rate is decayed by a factor of 10 every half of total epochs
     if (epoch + 1) % (opt.nEpochs / 2) == 0:
         for param_group in optimizer.param_groups:
             param_group['lr'] /= 10.0
-        print('Learning rate decay: lr={}'.format(optimizer.param_groups[0]['lr']))
+        print(f"Learning rate decay: lr={optimizer.param_groups[0]['lr']}")
 
-    if (epoch + 1) % (opt.snapshots) == 0:
+    if (epoch + 1) % opt.snapshots == 0:
         checkpoint(epoch)
