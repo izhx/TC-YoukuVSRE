@@ -8,7 +8,7 @@ import torch.backends.cudnn as cudnn
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
 
-from model.EDVR_arch import EDVR
+from model.EDVR_arch import EDVR, CharbonnierLoss
 from data.youku import YoukuDataset
 
 parser = argparse.ArgumentParser(description='PyTorch Super Res Example')
@@ -73,7 +73,7 @@ def train(e):
         t0 = time.time()
         prediction = single_forward(lr_seq, model)
         prediction_f = prediction.data.float().cpu().squeeze(0)
-        
+
         loss = criterion(prediction_f, gt)
         t1 = time.time()
         epoch_loss += loss.data[0]
@@ -107,7 +107,7 @@ else:
 if cuda:
     model = torch.nn.DataParallel(model, device_ids=gpus_list)
 
-criterion = nn.L1Loss()  # todo bonnier penalty function
+criterion = CharbonnierLoss()
 
 # print('---------- Networks architecture -------------')
 # print_network(model)

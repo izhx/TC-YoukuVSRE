@@ -6,7 +6,7 @@ import torch.nn.functional as F
 import model.module_util as mutil
 
 try:
-    from models.modules.DCNv2.dcn_v2 import DCN_sep
+    from .DCNv2.dcn_v2 import DCN_sep
 except ImportError:
     raise ImportError('Failed to import DCNv2 module.')
 
@@ -249,7 +249,7 @@ class EDVR(nn.Module):
         self.upconv1 = nn.Conv2d(nf, nf * 4, 3, 1, 1, bias=True)
         self.upconv2 = nn.Conv2d(nf, 64 * 4, 3, 1, 1, bias=True)
         self.pixel_shuffle = nn.PixelShuffle(2)
-        self.HRconv = nn.Conv2d(64, 64, 3, 1, 1, bias=True)
+        self.hr_conv = nn.Conv2d(64, 64, 3, 1, 1, bias=True)
         self.conv_last = nn.Conv2d(64, 3, 3, 1, 1, bias=True)
 
         #### activation function
@@ -306,7 +306,7 @@ class EDVR(nn.Module):
         out = self.recon_trunk(fea)
         out = self.lrelu(self.pixel_shuffle(self.upconv1(out)))
         out = self.lrelu(self.pixel_shuffle(self.upconv2(out)))
-        out = self.lrelu(self.HRconv(out))
+        out = self.lrelu(self.hr_conv(out))
         out = self.conv_last(out)
         if self.HR_in:
             base = x_center
@@ -314,3 +314,17 @@ class EDVR(nn.Module):
             base = F.interpolate(x_center, scale_factor=4, mode='bilinear', align_corners=False)
         out += base
         return out
+
+
+class CharbonnierLoss(nn.Module):
+    """L1 charbonnier loss."""
+
+    def __init__(self, epsilon=1e-3):
+        super(CharbonnierLoss, self).__init__()
+        self.eps = epsilon * epsilon
+
+    def forward(self, X, Y):
+        diff = torch.add(X, -Y)
+        error = torch.sqrt(diff * diff + self.eps)
+        loss = torch.sum(error)
+        return loss
