@@ -7,13 +7,14 @@ import torch.optim as optim
 import torch.backends.cudnn as cudnn
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
+import numpy as np
 
 from model.EDVR_arch import EDVR, CharbonnierLoss
 from data.youku import YoukuDataset
 
 parser = argparse.ArgumentParser(description='PyTorch Super Res Example')
 parser.add_argument('--upscale_factor', type=int, default=4, help="super resolution upscale factor")
-parser.add_argument('--batchSize', type=int, default=8, help='training batch size')
+parser.add_argument('--batchSize', type=int, default=16, help='training batch size')
 # parser.add_argument('--testBatchSize', type=int, default=5, help='testing batch size')
 parser.add_argument('--start_epoch', type=int, default=1, help='Starting epoch for continuing training')
 parser.add_argument('--nEpochs', type=int, default=150, help='number of epochs to train for')
@@ -23,11 +24,11 @@ parser.add_argument('--gpu_mode', type=bool, default=True)
 parser.add_argument('--threads', type=int, default=0, help='number of threads for data loader to use')
 parser.add_argument('--seed', type=int, default=123, help='random seed to use. Default=123')
 parser.add_argument('--gpus', default=1, type=int, help='number of gpu')
-parser.add_argument('--data_dir', type=str, default='./dataset')
+parser.add_argument('--data_dir', type=str, default='./dataset/train')
 # parser.add_argument('--other_dataset', type=bool, default=False, help="use other dataset than vimeo-90k")
 parser.add_argument('--nFrames', type=int, default=5)
 parser.add_argument('--patch_size', type=int, default=64, help='0 to use original frame size')
-parser.add_argument('--data_augmentation', type=bool, default=True)
+parser.add_argument('--data_augmentation', type=bool, default=False)
 parser.add_argument('--padding', type=str, default="reflection",
                     help="padding: replicate | reflection | new_info | circle")
 parser.add_argument('--model_type', type=str, default='EDVR')
@@ -53,6 +54,7 @@ print(opt)
 
 def single_forward(imgs_in, net):
     with torch.no_grad():
+        #print(imgs_in.shape)
         model_output = net(imgs_in)
         if isinstance(model_output, list) or isinstance(model_output, tuple):
             output = model_output[0]
@@ -64,26 +66,27 @@ def single_forward(imgs_in, net):
 def train(e):
     epoch_loss = 0
     model.train()
-    for iteration, batch in enumerate(training_data_loader, 1):
+    for iteration, batch in enumerate(train_set,1):
         lr_seq, gt = batch[0], batch[1]
         if cuda:
-            lr_seq = Variable(lr_seq).cuda(gpus_list[0])
+            lr_seq = Variable(lr_seq,requires_grad=True).cuda(gpus_list[0])
 
         optimizer.zero_grad()
         t0 = time.time()
         prediction = single_forward(lr_seq, model)
-        prediction_f = prediction.data.float().cpu().squeeze(0)
+        prediction_f = Variable(prediction.data.float().cpu().squeeze(0),requires_grad=True)
 
         loss = criterion(prediction_f, gt)
         t1 = time.time()
-        epoch_loss += loss.data[0]
+        #print(loss)
+        epoch_loss += loss.item()
         loss.backward()
         optimizer.step()
 
-        print(f"===> Epoch[{e}]({iteration}/{len(training_data_loader)}):",
-              f" Loss: {loss.data[0]:.4f} || Timer: {(t1 - t0):.4f} sec.")
+        print(f"===> Epoch[{e}]({iteration}/{len(train_set)}):",
+              f" Loss: {loss.item():.4f} || Timer: {(t1 - t0):.4f} sec.")
 
-    print(f"===> Epoch {e} Complete: Avg. Loss: {epoch_loss / len(training_data_loader):.4f}")
+    print(f"===> Epoch {e} Complete: Avg. Loss: {epoch_loss / len(train_set):.4f}")
 
 
 def checkpoint(epoch_now):
@@ -95,7 +98,7 @@ def checkpoint(epoch_now):
 
 print('===> Loading dataset')
 train_set = YoukuDataset(opt.data_dir, opt.upscale_factor, opt.nFrames,
-                         opt.data_augmentation, opt.path_size, opt.padding)
+                         opt.data_augmentation, opt.patch_size, opt.padding)
 training_data_loader = DataLoader(dataset=train_set, num_workers=opt.threads,
                                   batch_size=opt.batchSize, shuffle=True)
 

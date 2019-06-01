@@ -10,10 +10,8 @@ from data.youku import YoukuDataset
 def read_y4m(file_path, mode="444"):
     """
     读取y4m视频文件为4维ndarray
-
     :param file_path: the path of a y4m file (420planar).
     :param mode: 元素排列格式
-
     :return: a ndarray with the shape of (nFrames, height, width, 3) and meta data
     """
     with open(file_path, 'rb') as fp:
@@ -56,7 +54,6 @@ def read_y4m(file_path, mode="444"):
 def convert(data_dir):
     """
     对文件夹目录下所有y4m文件分帧按文件夹存放。
-
     :param data_dir: data dir
     """
     t0 = time.time()
@@ -125,7 +122,6 @@ def resize(image, width=None, height=None, inter=cv2.INTER_LINEAR):
 def yuv444to420p(img: np.ndarray, inter=cv2.INTER_LINEAR) -> np.ndarray:
     """
     yuv444转420p，可自定义方法
-
     :param img: 图像
     :param inter: 插值方法
     :return: 一维数组
@@ -141,7 +137,7 @@ if __name__ == '__main__':
     DIR = "../dataset/train"
     imgs, _ = read_y4m("../dataset/train/Youku_00000_l.y4m")
     fs = [yuv444to420p(i) for i in imgs]
-    save_y4m(fs, "../dataset/train/Youku_00000_l/header.txt", "../results/Youku_00000_l.y4m")
+    #save_y4m(fs, "../dataset/train/Youku_00000_l/header.txt", "../results/Youku_00000_l.y4m")
     convert(DIR)
 
     # header: 'signature width height fps interlacing pixelAspectRadio colorSpace comment'
