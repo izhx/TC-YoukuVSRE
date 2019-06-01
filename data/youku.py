@@ -5,11 +5,10 @@ import cv2
 import numpy as np
 import torch
 import torch.utils.data as data
-from PIL import Image, ImageOps
 
 
 class YoukuDataset(data.Dataset):
-    def __init__(self, data_dir, upscale_factor, nFrames, augmentation, patch_size, padding):
+    def __init__(self, data_dir, upscale_factor, nFrames, augmentation, patch_size, padding, shuffle=False):
         super(YoukuDataset, self).__init__()
         self.upscale_factor = upscale_factor
         self.augmentation = augmentation
@@ -17,18 +16,20 @@ class YoukuDataset(data.Dataset):
         self.data_dir = data_dir
         self.nFrames = nFrames
         self.padding = padding
-        self.paths = [v for v in glob.glob(f"{data_dir}/*/*_l_*.npy")]
-        self.imgs = [os.path.basename(v) for v in self.paths]
+        self.paths = [os.path.normpath(v) for v in glob.glob(f"{data_dir}/*_l*")]
+        if shuffle:
+            random.shuffle(self.paths)
         # self.__getitem__(0)
-        # todo 抽帧 乱序 增强
         return
 
     def __getitem__(self, index):
-        ref = self.imgs[index]
-        gt_path = f"{self.data_dir}/{ref[:13]}/{ref}".replace('_l', '_h_GT')
+        vid = self.paths[index].split('\\')[-1]
+        frame_paths = glob.glob(f"{self.paths[index]}\\*.npy")
+        ref_path = frame_paths[random.randint(3, len(frame_paths) - 4)]
+        gt_path = f"{ref_path}".replace('_l', '_h_GT')
         hr = read_npy(gt_path)
-        files = self.generate_names(ref, self.padding)
-        imgs = [read_npy(f"{self.data_dir}/{f[:13]}/{f}") for f in files]
+        files = self.generate_names(ref_path, self.padding)
+        imgs = [read_npy(f) for f in files]
 
         if self.augmentation:
             imgs, hr, _ = augment(imgs, hr)
@@ -41,7 +42,7 @@ class YoukuDataset(data.Dataset):
         return lr_seq.unsqueeze(0), gt
 
     def __len__(self):
-        return len(self.imgs)
+        return len(self.paths)
 
     def __add__(self, other):
         return data.dataset.ConcatDataset([self, other])
@@ -124,6 +125,6 @@ def rotate(image, angle, center=None, scale=1.0):  # 1
     (h, w) = image.shape[:2]  # 2
     if center is None:  # 3
         center = (w // 2, h // 2)  # 4
-    M = cv2.getRotationMatrix2D(center, angle, scale)  # 5
-    rotated = cv2.warpAffine(image, M, (w, h))  # 6
+    rm = cv2.getRotationMatrix2D(center, angle, scale)  # 5
+    rotated = cv2.warpAffine(image, rm, (w, h))  # 6
     return rotated  # 7

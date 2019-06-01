@@ -209,10 +209,10 @@ class TSA_Fusion(nn.Module):
 class EDVR(nn.Module):
     def __init__(self,
                  nf=64,
-                 nframes=5,
+                 nframes=7,
                  groups=8,
                  front_RBs=5,
-                 back_RBs=10,
+                 back_RBs=40,
                  center=None,
                  predeblur=False,
                  HR_in=False):
