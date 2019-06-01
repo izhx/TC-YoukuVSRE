@@ -16,7 +16,7 @@ class YoukuDataset(data.Dataset):
         self.data_dir = data_dir
         self.nFrames = nFrames
         self.padding = padding
-        self.paths = [os.path.normpath(v) for v in glob.glob(f"{data_dir}/*_l*")]
+        self.paths = [os.path.normpath(v) for v in glob.glob(f"{data_dir}/*_l*") if os.path.isdir(v)]
         if shuffle:
             random.shuffle(self.paths)
         # self.__getitem__(0)
@@ -25,7 +25,12 @@ class YoukuDataset(data.Dataset):
     def __getitem__(self, index):
         vid = self.paths[index].split('\\')[-1]
         frame_paths = glob.glob(f"{self.paths[index]}\\*.npy")
-        ref_path = frame_paths[random.randint(3, len(frame_paths) - 4)]
+        # 随机抽帧
+        if len(frame_paths) >= self.nFrames:
+            ref_id = random.randint(3, len(frame_paths) - 4)
+        else:  # todo
+            ref_id = random.randint(0, len(frame_paths))
+        ref_path = frame_paths[ref_id]
         gt_path = f"{ref_path}".replace('_l', '_h_GT')
         hr = read_npy(gt_path)
         files = self.generate_names(ref_path, self.padding)
@@ -52,7 +57,7 @@ class YoukuDataset(data.Dataset):
         padding: replicate | reflection | new_info | circle
         :param file_name: 文件名
         :param padding: 补齐模式
-        :return: 索引序列 [Youku_00000_l_100_00_.npy, ...]
+        :return: 索引序列 [Youku_00000_l-00_100_00_.npy, ...]
         """
         fnl = file_name.split('_')
         max_n, crt_i = fnl[-3:-1]  # crt_i: 当前帧序号   max_n: 视频帧数
@@ -61,6 +66,9 @@ class YoukuDataset(data.Dataset):
         max_n = max_n - 1
         n_pad = self.nFrames // 2
         return_l = []
+
+        if max_n < self.nFrames:
+            padding = 'replicate'
 
         for i in range(crt_i - n_pad, crt_i + n_pad + 1):
             if i < 0:
