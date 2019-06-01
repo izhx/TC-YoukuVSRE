@@ -17,9 +17,10 @@ class YoukuDataset(data.Dataset):
         self.data_dir = data_dir
         self.nFrames = nFrames
         self.padding = padding
-        self.paths = [v for v in glob.glob(f"{data_dir}/*/*_l_*.npy")]  # TODO 抽帧？
+        self.paths = [v for v in glob.glob(f"{data_dir}/*/*_l_*.npy")]
         self.imgs = [os.path.basename(v) for v in self.paths]
         # self.__getitem__(0)
+        # todo 抽帧 乱序 增强
         return
 
     def __getitem__(self, index):
@@ -29,20 +30,15 @@ class YoukuDataset(data.Dataset):
         files = self.generate_names(ref, self.padding)
         imgs = [read_npy(f"{self.data_dir}/{f[:13]}/{f}") for f in files]
 
-        # if self.patch_size != 0:
-        #     imgs, hr, _ = get_patch(hr, imgs, self.patch_size, self.upscale_factor)
-
-        # if self.augmentation:
-        #     imgs, hr, _ = augment(imgs, hr)
+        if self.augmentation:
+            imgs, hr, _ = augment(imgs, hr)
 
         lr_seq = np.stack(imgs, axis=0)
         lr_seq = np.pad(lr_seq, ((0, 0), (1, 1), (0, 0), (0, 0)), 'constant', constant_values=(0, 0))
         lr_seq = torch.from_numpy(np.ascontiguousarray(lr_seq.transpose((0, 3, 1, 2)))).float()
-        imgs_in = lr_seq.index_select(0, torch.LongTensor(
-            [n for n in range(self.nFrames)])).unsqueeze(0)  # TODO 用tensor操作替代
         gt = np.ascontiguousarray(np.transpose(hr, (2, 0, 1)))
         gt = torch.from_numpy(np.pad(gt, ((0, 0), (4, 4), (0, 0)), 'constant', constant_values=(0, 0))).float()
-        return imgs_in, gt
+        return lr_seq.unsqueeze(0), gt
 
     def __len__(self):
         return len(self.imgs)
@@ -95,93 +91,39 @@ class YoukuDataset(data.Dataset):
         return return_l
 
 
-def read_npy(path):
-    return np.load(path).astype(np.float32) / 255
-
-
-def read_image(img_path):
-    """read one image from img_path
-    Return img: HWC, BGR, [0,1], numpy
-    """
-    img_gt = cv2.imread(img_path)
-    img = img_gt.astype(np.float32) / 255.
-    return img
-
-
-def read_seq_imgs(img_seq_path):
-    """
-    read a sequence of images
-    :param img_seq_path:
-    :return:
-    """
-    img_path_l = sorted(glob.glob(img_seq_path + '/*'))
-    img_l = [read_image(v) for v in img_path_l]
-    # stack to T C H W, RGB, [0,1], torch
-    imgs = np.stack(img_l, axis=0)
-    imgs = imgs[:, :, :, [2, 1, 0]]
-    imgs = torch.from_numpy(np.ascontiguousarray(np.transpose(imgs, (0, 3, 1, 2)))).float()
-    return imgs
-
-
 class Error(Exception):
     pass
 
 
-def rescale_img(img_in, scale):
-    size_in = img_in.size
-    new_size_in = tuple([int(x * scale) for x in size_in])
-    img_in = img_in.resize(new_size_in, resample=Image.BICUBIC)
-    return img_in
-
-
-def mod_crop(img, modulo):
-    (ih, iw) = img.size
-    ih = ih - (ih % modulo)
-    iw = iw - (iw % modulo)
-    img = img.crop((0, 0, ih, iw))
-    return img
-
-
-def get_patch(hr, lr_seq, patch_size, scale, ix=-1, iy=-1):
-    # print(lr_seq[0].shape)
-    # print(hr)
-    (ih, iw) = lr_seq[0].shape[:2]
-    tp = scale * patch_size
-    ip = tp // scale
-
-    if ix == -1:
-        ix = random.randrange(0, iw - ip + 1)
-    if iy == -1:
-        iy = random.randrange(0, ih - ip + 1)
-
-    (tx, ty) = (scale * ix, scale * iy)
-
-    hr = hr[ty:ty + tp, tx:tx + tp, :]  # hr.crop((ty, tx, ty + tp, tx + tp))  # [:, ty:ty + tp, tx:tx + tp]
-    lr_seq = [j[ty:ty + tp, tx:tx + tp, :] for j in lr_seq]  # [:, iy:iy + ip, ix:ix + ip]
-
-    info_patch = {
-        'ix': ix, 'iy': iy, 'ip': ip, 'tx': tx, 'ty': ty, 'tp': tp}
-
-    return lr_seq, hr, info_patch
+def read_npy(path):
+    return np.load(path).astype(np.float32) / 255
 
 
 def augment(lr_seq, hr, flip_h=True, rot=True):
     info_aug = {'flip_h': False, 'flip_v': False, 'trans': False}
 
     if random.random() < 0.5 and flip_h:
-        # print(hr.shape)
-        hr = ImageOps.flip(hr)
-        lr_seq = [ImageOps.flip(j) for j in lr_seq]
+        hr = cv2.flip(hr, 1)
+        lr_seq = [cv2.flip(lr, 1) for lr in lr_seq]
         info_aug['flip_h'] = True
 
     if rot:
         if random.random() < 0.5:
-            hr = ImageOps.mirror(hr)
-            lr_seq = [ImageOps.mirror(j) for j in lr_seq]
+            hr = cv2.flip(hr, 0)
+            lr_seq = [cv2.flip(lr, 0) for lr in lr_seq]
             info_aug['flip_v'] = True
         if random.random() < 0.5:
-            hr = hr.rotate(180)
-            lr_seq = [j.rotate(180) for j in lr_seq]
+            hr = rotate(hr, 180)
+            lr_seq = [rotate(lr, 180) for lr in lr_seq]
             info_aug['trans'] = True
 
-    return hr, lr_seq, info_aug
+    return lr_seq, hr, info_aug
+
+
+def rotate(image, angle, center=None, scale=1.0):  # 1
+    (h, w) = image.shape[:2]  # 2
+    if center is None:  # 3
+        center = (w // 2, h // 2)  # 4
+    M = cv2.getRotationMatrix2D(center, angle, scale)  # 5
+    rotated = cv2.warpAffine(image, M, (w, h))  # 6
+    return rotated  # 7

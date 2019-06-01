@@ -133,7 +133,7 @@ def yuv444to420p(img: np.ndarray, inter=cv2.INTER_LINEAR) -> np.ndarray:
 
 
 if __name__ == '__main__':
-    # yk = YoukuDataset("../dataset/train", 4, 5, True, 31, "new_info")
+    yk = YoukuDataset("../dataset/train", 4, 5, True, 31, "new_info")
     DIR = "../dataset/train"
     imgs, _ = read_y4m("../dataset/train/Youku_00000_l.y4m")
     fs = [yuv444to420p(i) for i in imgs]

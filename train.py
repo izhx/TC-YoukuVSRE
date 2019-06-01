@@ -26,7 +26,7 @@ parser.add_argument('--gpus', default=1, type=int, help='number of gpu')
 parser.add_argument('--data_dir', type=str, default='./dataset/train')
 # parser.add_argument('--other_dataset', type=bool, default=False, help="use other dataset than vimeo-90k")
 parser.add_argument('--nFrames', type=int, default=5)
-parser.add_argument('--patch_size', type=int, default=64, help='0 to use original frame size')
+parser.add_argument('--patch_size', type=int, default=0, help='0 to use original frame size')
 parser.add_argument('--data_augmentation', type=bool, default=False)
 parser.add_argument('--padding', type=str, default="reflection",
                     help="padding: replicate | reflection | new_info | circle")
@@ -101,7 +101,7 @@ training_data_loader = DataLoader(dataset=train_set, num_workers=opt.threads,
 
 print('===> Building model ', opt.model_type)
 if opt.model_type == 'EDVR':
-    model = EDVR()
+    model = EDVR()  # TODO edvr参数
 else:
     model = None
 
