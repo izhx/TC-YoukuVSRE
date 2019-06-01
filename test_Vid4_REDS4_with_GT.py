@@ -48,7 +48,7 @@ def main():
         predeblur = True
     if data_mode == 'blur' or data_mode == 'blur_comp':
         predeblur, HR_in = True, True
-    model = EDVR_arch.EDVR(128, N_in, 8, 5, 40, predeblur=predeblur, HR_in=HR_in)
+    model = EDVR_arch.EDVR(128, N_in, 8, 5, 40, predeblur=predeblur, hr_in=HR_in)
 
     #### dataset
     if data_mode == 'Vid4':

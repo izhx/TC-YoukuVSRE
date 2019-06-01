@@ -215,20 +215,20 @@ class EDVR(nn.Module):
                  back_RBs=40,
                  center=None,
                  predeblur=False,
-                 HR_in=False):
+                 hr_in=False):
         super(EDVR, self).__init__()
         self.nf = nf
         self.center = nframes // 2 if center is None else center
         self.is_predeblur = True if predeblur else False
-        self.HR_in = True if HR_in else False
+        self.hr_in = True if hr_in else False
         ResidualBlock_noBN_f = functools.partial(mutil.ResidualBlock_noBN, nf=nf)
 
-        #### extract features (for each frame)
+        # extract features (for each frame)
         if self.is_predeblur:
-            self.pre_deblur = Predeblur_ResNet_Pyramid(nf=nf, HR_in=self.HR_in)
+            self.pre_deblur = Predeblur_ResNet_Pyramid(nf=nf, HR_in=self.hr_in)
             self.conv_1x1 = nn.Conv2d(nf, nf, 1, 1, bias=True)
         else:
-            if self.HR_in:
+            if self.hr_in:
                 self.conv_first_1 = nn.Conv2d(3, nf, 3, 1, 1, bias=True)
                 self.conv_first_2 = nn.Conv2d(nf, nf, 3, 2, 1, bias=True)
                 self.conv_first_3 = nn.Conv2d(nf, nf, 3, 2, 1, bias=True)
@@ -243,7 +243,7 @@ class EDVR(nn.Module):
         self.pcd_align = PCD_Align(nf=nf, groups=groups)
         self.tsa_fusion = TSA_Fusion(nf=nf, nframes=nframes, center=self.center)
 
-        #### reconstruction
+        # reconstruction
         self.recon_trunk = mutil.make_layer(ResidualBlock_noBN_f, back_RBs)
         #### upsampling
         self.upconv1 = nn.Conv2d(nf, nf * 4, 3, 1, 1, bias=True)
@@ -252,22 +252,36 @@ class EDVR(nn.Module):
         self.hr_conv = nn.Conv2d(64, 64, 3, 1, 1, bias=True)
         self.conv_last = nn.Conv2d(64, 3, 3, 1, 1, bias=True)
 
-        #### activation function
+        # activation function
         self.lrelu = nn.LeakyReLU(negative_slope=0.1, inplace=True)
+
+        # kaiming normal
+        for m in self.modules():
+            classname = m.__class__.__name__
+            if classname.find('Conv2d') != -1:
+                torch.nn.init.kaiming_normal_(m.weight)
+                if m.bias is not None:
+                    m.bias.data.zero_()
+            elif classname.find('ConvTranspose2d') != -1:
+                torch.nn.init.kaiming_normal_(m.weight)
+                if m.bias is not None:
+                    m.bias.data.zero_()
+
+        return
 
     def forward(self, x):
         B, N, C, H, W = x.size()  # N video frames
         x_center = x[:, self.center, :, :, :].contiguous()
 
-        #### extract LR features
+        # extract LR features
         # L1
         if self.is_predeblur:
             L1_fea = self.pre_deblur(x.view(-1, C, H, W))
             L1_fea = self.conv_1x1(L1_fea)
-            if self.HR_in:
+            if self.hr_in:
                 H, W = H // 4, W // 4
         else:
-            if self.HR_in:
+            if self.hr_in:
                 L1_fea = self.lrelu(self.conv_first_1(x.view(-1, C, H, W)))
                 L1_fea = self.lrelu(self.conv_first_2(L1_fea))
                 L1_fea = self.lrelu(self.conv_first_3(L1_fea))
@@ -286,7 +300,7 @@ class EDVR(nn.Module):
         L2_fea = L2_fea.view(B, N, -1, H // 2, W // 2)
         L3_fea = L3_fea.view(B, N, -1, H // 4, W // 4)
 
-        #### pcd align
+        # pcd align
         # ref feature list
         ref_fea_l = [
             L1_fea[:, self.center, :, :, :].clone(), L2_fea[:, self.center, :, :, :].clone(),
@@ -308,7 +322,7 @@ class EDVR(nn.Module):
         out = self.lrelu(self.pixel_shuffle(self.upconv2(out)))
         out = self.lrelu(self.hr_conv(out))
         out = self.conv_last(out)
-        if self.HR_in:
+        if self.hr_in:
             base = x_center
         else:
             base = F.interpolate(x_center, scale_factor=4, mode='bilinear', align_corners=False)
