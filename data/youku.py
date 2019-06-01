@@ -17,7 +17,7 @@ class YoukuDataset(data.Dataset):
         self.data_dir = data_dir
         self.nFrames = nFrames
         self.padding = padding
-        self.paths = [v for v in glob.glob(f"{data_dir}/*/*_l_*.npy")]
+        self.paths = [v for v in glob.glob(f"{data_dir}/*/*_l_*.npy")]  # TODO 抽帧？
         self.imgs = [os.path.basename(v) for v in self.paths]
         # self.__getitem__(0)
         return
@@ -25,7 +25,6 @@ class YoukuDataset(data.Dataset):
     def __getitem__(self, index):
         ref = self.imgs[index]
         gt_path = f"{self.data_dir}/{ref[:13]}/{ref}".replace('_l', '_h_GT')
-        #print(gt_path)
         hr = read_npy(gt_path)
         files = self.generate_names(ref, self.padding)
         imgs = [read_npy(f"{self.data_dir}/{f[:13]}/{f}") for f in files]
@@ -35,22 +34,20 @@ class YoukuDataset(data.Dataset):
 
         # if self.augmentation:
         #     imgs, hr, _ = augment(imgs, hr)
-        #print(imgs)
-        lr_seq = np.stack(imgs, axis=0)  # todo gt待检验形状
-        #print(lr_seq.shape)
-        lr_seq = lr_seq[:, :, :, [2, 1, 0]]
-        lr_seq=np.pad(lr_seq,((0,0),(1,1),(0,0),(0,0)),'constant',constant_values=(0,0));
+
+        lr_seq = np.stack(imgs, axis=0)
+        lr_seq = np.pad(lr_seq, ((0, 0), (1, 1), (0, 0), (0, 0)), 'constant', constant_values=(0, 0))
         lr_seq = torch.from_numpy(np.ascontiguousarray(lr_seq.transpose((0, 3, 1, 2)))).float()
-        imgs_in = lr_seq.index_select(0, torch.LongTensor([n for n in range(self.nFrames)])).unsqueeze(0)
+        imgs_in = lr_seq.index_select(0, torch.LongTensor(
+            [n for n in range(self.nFrames)])).unsqueeze(0)  # TODO 用tensor操作替代
         gt = np.ascontiguousarray(np.transpose(hr, (2, 0, 1)))
-        #print(gt.shape)
-        gt = torch.from_numpy(np.pad(gt, ((0, 0), (4, 4), (0, 0)), 'constant', constant_values=(0, 0))).float();
+        gt = torch.from_numpy(np.pad(gt, ((0, 0), (4, 4), (0, 0)), 'constant', constant_values=(0, 0))).float()
         return imgs_in, gt
 
     def __len__(self):
         return len(self.imgs)
 
-    def __add__(self, other):  # todo
+    def __add__(self, other):
         return data.dataset.ConcatDataset([self, other])
 
     def generate_names(self, file_name, padding='reflection'):
@@ -146,8 +143,8 @@ def mod_crop(img, modulo):
 
 
 def get_patch(hr, lr_seq, patch_size, scale, ix=-1, iy=-1):
-    #print(lr_seq[0].shape)
-    #print(hr)
+    # print(lr_seq[0].shape)
+    # print(hr)
     (ih, iw) = lr_seq[0].shape[:2]
     tp = scale * patch_size
     ip = tp // scale
@@ -159,8 +156,8 @@ def get_patch(hr, lr_seq, patch_size, scale, ix=-1, iy=-1):
 
     (tx, ty) = (scale * ix, scale * iy)
 
-    hr = hr[ ty:ty + tp, tx:tx + tp,:]#hr.crop((ty, tx, ty + tp, tx + tp))  # [:, ty:ty + tp, tx:tx + tp]
-    lr_seq = [j[ ty:ty + tp, tx:tx + tp,:] for j in lr_seq]  # [:, iy:iy + ip, ix:ix + ip]
+    hr = hr[ty:ty + tp, tx:tx + tp, :]  # hr.crop((ty, tx, ty + tp, tx + tp))  # [:, ty:ty + tp, tx:tx + tp]
+    lr_seq = [j[ty:ty + tp, tx:tx + tp, :] for j in lr_seq]  # [:, iy:iy + ip, ix:ix + ip]
 
     info_patch = {
         'ix': ix, 'iy': iy, 'ip': ip, 'tx': tx, 'ty': ty, 'tp': tp}
@@ -172,7 +169,7 @@ def augment(lr_seq, hr, flip_h=True, rot=True):
     info_aug = {'flip_h': False, 'flip_v': False, 'trans': False}
 
     if random.random() < 0.5 and flip_h:
-        #print(hr.shape)
+        # print(hr.shape)
         hr = ImageOps.flip(hr)
         lr_seq = [ImageOps.flip(j) for j in lr_seq]
         info_aug['flip_h'] = True

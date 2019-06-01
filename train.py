@@ -7,7 +7,6 @@ import torch.optim as optim
 import torch.backends.cudnn as cudnn
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
-import numpy as np
 
 from model.EDVR_arch import EDVR, CharbonnierLoss
 from data.youku import YoukuDataset
@@ -54,7 +53,6 @@ print(opt)
 
 def single_forward(imgs_in, net):
     with torch.no_grad():
-        #print(imgs_in.shape)
         model_output = net(imgs_in)
         if isinstance(model_output, list) or isinstance(model_output, tuple):
             output = model_output[0]
@@ -66,19 +64,18 @@ def single_forward(imgs_in, net):
 def train(e):
     epoch_loss = 0
     model.train()
-    for iteration, batch in enumerate(train_set,1):
+    for iteration, batch in enumerate(train_set, 1):
         lr_seq, gt = batch[0], batch[1]
         if cuda:
-            lr_seq = Variable(lr_seq,requires_grad=True).cuda(gpus_list[0])
+            lr_seq = Variable(lr_seq, requires_grad=True).cuda(gpus_list[0])
 
         optimizer.zero_grad()
         t0 = time.time()
         prediction = single_forward(lr_seq, model)
-        prediction_f = Variable(prediction.data.float().cpu().squeeze(0),requires_grad=True)
-
+        prediction_f = Variable(prediction.data.float().cpu().squeeze(0), requires_grad=True)
         loss = criterion(prediction_f, gt)
         t1 = time.time()
-        #print(loss)
+
         epoch_loss += loss.item()
         loss.backward()
         optimizer.step()
@@ -112,10 +109,6 @@ if cuda:
     model = torch.nn.DataParallel(model, device_ids=gpus_list)
 
 criterion = CharbonnierLoss()
-
-# print('---------- Networks architecture -------------')
-# print_network(model)
-# print('----------------------------------------------')
 
 if opt.pretrained:
     model_name = os.path.join(opt.save_folder + opt.pretrained_sr)
