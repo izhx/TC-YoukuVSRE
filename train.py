@@ -53,12 +53,6 @@ print(opt)
 avgpool = torch.nn.AvgPool2d((2, 2), stride=(2, 2))
 
 
-def batch_forward(imgs_in, target, net):
-    output = net(imgs_in)
-
-    return output
-
-
 def train(e):
     epoch_loss = 0
     model.train()
@@ -70,7 +64,9 @@ def train(e):
 
         optimizer.zero_grad()
         t0 = time.time()
-        prediction = model(lr_seq)
+        with torch.no_grad():
+            prediction = model(lr_seq)
+
         prediction_pool = avgpool(prediction[:, (1, 2), :, :])
         gt_pool = avgpool(gt[:, (1, 2), :, :])
         loss = criterion(prediction[:, 0, :, :], gt[:, 0, :, :]) + criterion(prediction_pool, gt_pool)
@@ -109,14 +105,14 @@ data_loader = DataLoader(dataset=train_set, batch_size=opt.batchSize,
 
 print('===> Building model ', opt.model_type)
 if opt.model_type == 'EDVR':
-    model = EDVR(128, opt.nFrames, 8, 5, 40)  # TODO edvr参数
+    model = EDVR(64, opt.nFrames, groups=8, front_RBs=5, back_RBs=40)  # TODO edvr参数
 else:
     model = None
 
 if cuda:
     model = torch.nn.DataParallel(model, device_ids=gpus_list)
 
-criterion = CharbonnierLoss()
+criterion = CharbonnierLoss(reduce=True)
 
 if opt.pretrained:
     model_name = os.path.join(opt.save_folder + opt.pretrained_sr)
@@ -145,6 +141,7 @@ for epoch in range(opt.start_epoch, opt.nEpochs + 1):
 
 """
 需要调节的：
+- nf 默认64，是卷积的通道
 - padding
 - nFrames
 - lr 的更新

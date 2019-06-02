@@ -333,12 +333,16 @@ class EDVR(nn.Module):
 class CharbonnierLoss(nn.Module):
     """L1 charbonnier loss."""
 
-    def __init__(self, epsilon=1e-3):
+    def __init__(self, epsilon=1e-3, reduce=False):
         super(CharbonnierLoss, self).__init__()
         self.eps = epsilon * epsilon
+        self.reduce = reduce
 
     def forward(self, X, Y):
         diff = torch.add(X, -Y)
         error = torch.sqrt(diff * diff + self.eps)
-        loss = torch.sum(error)
+        if self.reduce:
+            loss = torch.mean(error)
+        else:
+            loss = torch.sum(error)
         return loss
