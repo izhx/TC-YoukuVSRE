@@ -6,7 +6,6 @@ import cv2
 import numpy as np
 
 
-
 def read_y4m(file_path, mode="444"):
     """
     读取y4m视频文件为4维ndarray
@@ -51,7 +50,7 @@ def read_y4m(file_path, mode="444"):
     return np.array(frames), header
 
 
-def convert(data_dir):
+def convert(data_dir, cut=False):
     """
     对文件夹目录下所有y4m文件分帧按文件夹存放。
     :param data_dir: data dir
@@ -64,16 +63,26 @@ def convert(data_dir):
         print("\r" + f"Processing {v_name}.  {i / len(path_list):.2%}", end="")
         frames, header = read_y4m(v_path)
         fid_len = len(str(len(frames) - 1))
-        # todo 转场分割
-        scenarios = [frames]
-        for ns, scenario in enumerate(scenarios):
-            s_dir = os.path.normpath(v_path[:-4] + '-' + str(ns).zfill(fid_len))  # 分帧存放文件夹
-            if not os.path.exists(s_dir):
-                os.makedirs(s_dir)
-            for n, f in enumerate(scenario):
-                s_d_n = s_dir.split('\\')[-1]
-                file_name = f"{s_d_n}_{len(scenario)}_{str(n).zfill(fid_len)}_.npy"
-                img_path = f"{s_dir}/{file_name}"
+        if cut:  # todo 转场分割
+            scenarios = [frames]
+            for ns, scenario in enumerate(scenarios):
+                s_dir = os.path.normpath(v_path[:-4] + '-' + str(ns).zfill(fid_len))  # 分帧存放文件夹
+                if not os.path.exists(s_dir):
+                    os.makedirs(s_dir)
+                for n, f in enumerate(scenario):
+                    s_d_n = s_dir.split('\\')[-1]
+                    file_name = f"{s_d_n}_{len(scenario)}_{str(n).zfill(fid_len)}_.npy"
+                    img_path = f"{s_dir}/{file_name}"
+                    np.save(img_path, f)
+        else:
+            im_dir = v_path[:-4]  # 分帧存放文件夹
+            if not os.path.exists(im_dir):
+                os.makedirs(im_dir)
+            fid_len = len(str(len(frames) - 1))
+            # save frames
+            for n, f in enumerate(frames):
+                file_name = f"{v_name}_{len(frames)}_{str(n).zfill(fid_len)}_.npy"
+                img_path = f"{im_dir}/{file_name}"
                 np.save(img_path, f)
         with open(v_path.replace('y4m', 'txt'), 'wb') as f:
             f.write(header)

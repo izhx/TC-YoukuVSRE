@@ -8,7 +8,7 @@ import torch.utils.data as data
 
 
 class YoukuDataset(data.Dataset):
-    def __init__(self, data_dir, upscale_factor, nFrames, augmentation, patch_size, padding, v_freq=2):
+    def __init__(self, data_dir, upscale_factor, nFrames, augmentation, patch_size, padding, v_freq=2, cut=False):
         super(YoukuDataset, self).__init__()
         self.upscale_factor = upscale_factor
         self.augmentation = augmentation
@@ -16,7 +16,10 @@ class YoukuDataset(data.Dataset):
         self.data_dir = data_dir
         self.nFrames = nFrames
         self.padding = padding
-        self.paths = [os.path.normpath(v) for v in glob.glob(f"{data_dir}/*_l*") if os.path.isdir(v)] * v_freq
+        if cut:
+            self.paths = [os.path.normpath(v) for v in glob.glob(f"{data_dir}/*_l*") if os.path.isdir(v)] * v_freq
+        else:
+            self.paths = [os.path.normpath(v) for v in glob.glob(f"{data_dir}/*_l")] * v_freq
         # self.__getitem__(0)
         return
 

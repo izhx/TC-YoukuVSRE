@@ -2,6 +2,7 @@ import os
 import time
 import glob
 import argparse
+from collections import OrderedDict
 import numpy as np
 import torch
 import torch.nn as nn
@@ -74,6 +75,16 @@ if opt.pretrained:
 if cuda:
     model = model.cuda(gpus_list[0])
     criterion = criterion.cuda(gpus_list[0])
+else:
+    # original saved file with DataParallel
+    state_dict = torch.load(opt.model, map_location=lambda storage, loc: storage)
+    # create new OrderedDict that does not contain `module.`
+    new_state_dict = OrderedDict()
+    for k, v in state_dict.items():
+        name = k[7:]  # remove `module.`
+        new_state_dict[name] = v
+    # load params
+    model.load_state_dict(new_state_dict)
 
 optimizer = optim.Adam(model.parameters(), lr=opt.lr, betas=(0.9, 0.999), eps=1e-8)
 
@@ -159,8 +170,8 @@ def single_test(video_path):
         v = convert_channel(prediction_pool[1, :, :])
         hr_frames.append(np.concatenate(y, u, v))
 
-    header[1] = b'W' + bytes(size[1])
-    header[2] = b'H' + bytes(size[0])
+    header[1] = b'W' + bytes(hr_size[1])
+    header[2] = b'H' + bytes(hr_size[0])
     save_path = f'{opt.result_dir}/{os.path.basename(video_path).replace("_l", "_h_Res")}'
     save_y4m(hr_frames, b' '.join(header), save_path)
     return
