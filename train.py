@@ -52,6 +52,7 @@ print(opt)
 
 def single_forward(imgs_in, net):
     with torch.no_grad():
+        print(imgs_in.shape)
         model_output = net(imgs_in)
         if isinstance(model_output, list) or isinstance(model_output, tuple):
             output = model_output[0]
@@ -72,7 +73,12 @@ def train(e):
         t0 = time.time()
         prediction = single_forward(lr_seq, model)
         prediction_f = Variable(prediction.data.float().cpu().squeeze(0), requires_grad=True)
-        loss = criterion(prediction_f, gt)
+
+        img_size=prediction_f.shape
+        avgpool=torch.nn.AvgPool2d((2, 2), stride=(2, 2))
+        prediction_f_pool = avgpool(prediction_f[(1,2), :, :])
+        gt_pool = avgpool(gt[(1,2), :, :])
+        loss = criterion(prediction_f[1, :, :], gt[1, :, :])+criterion(prediction_f_pool, gt_pool)
         t1 = time.time()
 
         epoch_loss += loss.item()
@@ -87,7 +93,7 @@ def train(e):
 
 def checkpoint(epoch_now):
     model_out_path = opt.save_folder + str(
-        opt.upscale_factor) + 'x_' + opt.model_type + opt.prefix + "_epoch_{}.pth".format(epoch_now)
+        opt.upscale_factor) + 'x_' + opt.model_type + 'yk' + "_epoch_{}.pth".format(epoch_now)
     torch.save(model.state_dict(), model_out_path)
     print("Checkpoint saved to {}".format(model_out_path))
 

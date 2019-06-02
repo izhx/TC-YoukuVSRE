@@ -39,11 +39,14 @@ class YoukuDataset(data.Dataset):
         if self.augmentation:
             imgs, hr, _ = augment(imgs, hr)
 
+
+
         lr_seq = np.stack(imgs, axis=0)
-        lr_seq = np.pad(lr_seq, ((0, 0), (1, 1), (0, 0), (0, 0)), 'constant', constant_values=(0, 0))
+        pad_size = (np.ceil(np.array(lr_seq.shape)[1:3]/4)*4-np.array(lr_seq.shape)[1:3]).astype(np.int)
+        lr_seq = np.pad(lr_seq, ((0, 0), (pad_size[0], pad_size[1]), (0, 0), (0, 0)), 'constant', constant_values=(0, 0))
         lr_seq = torch.from_numpy(np.ascontiguousarray(lr_seq.transpose((0, 3, 1, 2)))).float()
         gt = np.ascontiguousarray(np.transpose(hr, (2, 0, 1)))
-        gt = torch.from_numpy(np.pad(gt, ((0, 0), (4, 4), (0, 0)), 'constant', constant_values=(0, 0))).float()
+        gt = torch.from_numpy(np.pad(gt, ((0, 0), (pad_size[0]*4, pad_size[1]*4), (0, 0)), 'constant', constant_values=(0, 0))).float()
         return lr_seq.unsqueeze(0), gt
 
     def __len__(self):
