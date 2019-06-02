@@ -8,7 +8,7 @@ import torch.utils.data as data
 
 
 class YoukuDataset(data.Dataset):
-    def __init__(self, data_dir, upscale_factor, nFrames, augmentation, patch_size, padding, shuffle=False):
+    def __init__(self, data_dir, upscale_factor, nFrames, augmentation, patch_size, padding, v_freq=2):
         super(YoukuDataset, self).__init__()
         self.upscale_factor = upscale_factor
         self.augmentation = augmentation
@@ -16,38 +16,42 @@ class YoukuDataset(data.Dataset):
         self.data_dir = data_dir
         self.nFrames = nFrames
         self.padding = padding
-        self.paths = [os.path.normpath(v) for v in glob.glob(f"{data_dir}/*_l*") if os.path.isdir(v)]
-        if shuffle:
-            random.shuffle(self.paths)
+        self.paths = [os.path.normpath(v) for v in glob.glob(f"{data_dir}/*_l*") if os.path.isdir(v)] * v_freq
         # self.__getitem__(0)
         return
 
     def __getitem__(self, index):
-        vid = self.paths[index].split('\\')[-1]
         frame_paths = glob.glob(f"{self.paths[index]}\\*.npy")
         # 随机抽帧
         if len(frame_paths) >= self.nFrames:
             ref_id = random.randint(3, len(frame_paths) - 4)
-        else:  # todo
+        else:  # 有的太短
             ref_id = random.randint(0, len(frame_paths))
+        # 取数据
         ref_path = frame_paths[ref_id]
-        gt_path = f"{ref_path}".replace('_l', '_h_GT')
+        gt_path = f"{ref_path}".replace('_l', '_h_GT')  # 取GT
         hr = read_npy(gt_path)
         files = self.generate_names(ref_path, self.padding)
-        imgs = [read_npy(f) for f in files]
+        imgs = [read_npy(f) for f in files]  # lr 序列
 
         if self.augmentation:
             imgs, hr, _ = augment(imgs, hr)
 
-
+        # TODO get patch
 
         lr_seq = np.stack(imgs, axis=0)
-        pad_size = (np.ceil(np.array(lr_seq.shape)[1:3]/4)*4-np.array(lr_seq.shape)[1:3]).astype(np.int)
-        lr_seq = np.pad(lr_seq, ((0, 0), (pad_size[0], pad_size[1]), (0, 0), (0, 0)), 'constant', constant_values=(0, 0))
+        pad_size = (np.ceil(np.array(lr_seq.shape)[1:3] / 4) * 4 - np.array(lr_seq.shape)[1:3]).astype(np.int)
+        lr_seq = np.pad(lr_seq, ((0, 0), (pad_size[0], pad_size[1]), (0, 0), (0, 0)), 'constant',
+                        constant_values=(0, 0))
         lr_seq = torch.from_numpy(np.ascontiguousarray(lr_seq.transpose((0, 3, 1, 2)))).float()
         gt = np.ascontiguousarray(np.transpose(hr, (2, 0, 1)))
-        gt = torch.from_numpy(np.pad(gt, ((0, 0), (pad_size[0]*4, pad_size[1]*4), (0, 0)), 'constant', constant_values=(0, 0))).float()
-        return lr_seq.unsqueeze(0), gt
+        gt = torch.from_numpy(np.pad(gt, ((0, 0), (pad_size[0] * 4, pad_size[1] * 4), (0, 0)), 'constant',
+                                     constant_values=(0, 0))).float()
+        return lr_seq, gt
+
+    def collate_fn(self, batch):
+        lr_seq, gt = list(zip(*batch))
+        return torch.stack(lr_seq), torch.stack(gt)
 
     def __len__(self):
         return len(self.paths)

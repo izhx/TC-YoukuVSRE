@@ -270,7 +270,7 @@ class EDVR(nn.Module):
         return
 
     def forward(self, x):
-        B, N, C, H, W = x.size()  # N video frames
+        B, N, C, H, W = x.size()  # N video frames, 默认输入为batch
         x_center = x[:, self.center, :, :, :].contiguous()
 
         # extract LR features

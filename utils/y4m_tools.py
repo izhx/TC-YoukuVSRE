@@ -4,7 +4,7 @@ import glob
 import time
 import cv2
 import numpy as np
-from data.youku import YoukuDataset
+
 
 
 def read_y4m(file_path, mode="444"):
@@ -139,6 +139,7 @@ if __name__ == '__main__':
     # imgs, _ = read_y4m("../dataset/train/Youku_00000_l.y4m")
     # fs = [yuv444to420p(i) for i in imgs]
     # save_y4m(fs, "../dataset/train/Youku_00000_l/header.txt", "../results/Youku_00000_l.y4m")
+    # yk = YoukuDataset("../dataset/train", 4, 5, True, 31, "new_info")
     convert(DIR)
     pass
     # header: 'signature width height fps interlacing pixelAspectRadio colorSpace comment'

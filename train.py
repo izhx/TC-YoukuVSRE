@@ -13,7 +13,8 @@ from data.youku import YoukuDataset
 
 parser = argparse.ArgumentParser(description='PyTorch Super Res Example')
 parser.add_argument('--upscale_factor', type=int, default=4, help="super resolution upscale factor")
-parser.add_argument('--batchSize', type=int, default=32, help='training batch size')
+parser.add_argument('--batchSize', type=int, default=8, help='training batch size')
+parser.add_argument("--gradient_accumulations", type=int, default=2, help="number of gradient accumulation before step")
 parser.add_argument('--start_epoch', type=int, default=1, help='Starting epoch for continuing training')
 parser.add_argument('--nEpochs', type=int, default=150, help='number of epochs to train for')
 parser.add_argument('--snapshots', type=int, default=5, help='Snapshots')
@@ -30,7 +31,7 @@ parser.add_argument('--data_augmentation', type=bool, default=False)
 parser.add_argument('--padding', type=str, default="reflection",
                     help="padding: replicate | reflection | new_info | circle")
 parser.add_argument('--model_type', type=str, default='EDVR')
-parser.add_argument('--residual', type=bool, default=False)
+# parser.add_argument('--residual', type=bool, default=False)
 parser.add_argument('--pretrained_sr', default='weights/3x_edvr_epoch_84.pth', help='sr pretrained base model')
 parser.add_argument('--pretrained', type=bool, default=False)
 parser.add_argument('--save_folder', default='weights/', help='Location to save checkpoint models')
@@ -49,46 +50,47 @@ if cuda:
 
 print(opt)
 
+avgpool = torch.nn.AvgPool2d((2, 2), stride=(2, 2))
 
-def single_forward(imgs_in, net):
-    with torch.no_grad():
-        print(imgs_in.shape)
-        model_output = net(imgs_in)
-        if isinstance(model_output, list) or isinstance(model_output, tuple):
-            output = model_output[0]
-        else:
-            output = model_output
+
+def batch_forward(imgs_in, target, net):
+    output = net(imgs_in)
+
     return output
 
 
 def train(e):
     epoch_loss = 0
     model.train()
-    for iteration, batch in enumerate(train_set, 1):
-        lr_seq, gt = batch[0], batch[1]
+    for batch_i, (lr_seq, gt) in enumerate(data_loader):
+        batches_done = len(data_loader) * e + batch_i
         if cuda:
             lr_seq = Variable(lr_seq, requires_grad=True).cuda(gpus_list[0])
+            gt = Variable(gt, requires_grad=False).cuda(gpus_list[0])
 
         optimizer.zero_grad()
         t0 = time.time()
-        prediction = single_forward(lr_seq, model)
-        prediction_f = Variable(prediction.data.float().cpu().squeeze(0), requires_grad=True)
-
-        img_size=prediction_f.shape
-        avgpool=torch.nn.AvgPool2d((2, 2), stride=(2, 2))
-        prediction_f_pool = avgpool(prediction_f[(1,2), :, :])
-        gt_pool = avgpool(gt[(1,2), :, :])
-        loss = criterion(prediction_f[1, :, :], gt[1, :, :])+criterion(prediction_f_pool, gt_pool)
+        prediction = model(lr_seq)
+        prediction_pool = avgpool(prediction[:, (1, 2), :, :])
+        gt_pool = avgpool(gt[:, (1, 2), :, :])
+        loss = criterion(prediction[:, 0, :, :], gt[:, 0, :, :]) + criterion(prediction_pool, gt_pool)
         t1 = time.time()
 
         epoch_loss += loss.item()
+
         loss.backward()
         optimizer.step()
 
-        print(f"===> Epoch[{e}]({iteration}/{len(train_set)}):",
+        if batches_done % opt.gradient_accumulations:
+            # Accumulates gradient before each step
+            # optimizer.step()
+            # optimizer.zero_grad()
+            pass
+
+        print(f"===> Epoch[{e}]({batch_i}/{len(data_loader)}):",
               f" Loss: {loss.item():.4f} || Timer: {(t1 - t0):.4f} sec.")
 
-    print(f"===> Epoch {e} Complete: Avg. Loss: {epoch_loss / len(train_set):.4f}")
+    print(f"===> Epoch {e} Complete: Avg. Loss: {epoch_loss / len(data_loader):.4f}")
 
 
 def checkpoint(epoch_now):
@@ -100,9 +102,10 @@ def checkpoint(epoch_now):
 
 print('===> Loading dataset')
 train_set = YoukuDataset(opt.data_dir, opt.upscale_factor, opt.nFrames,
-                         opt.data_augmentation, opt.patch_size, opt.padding)
-training_data_loader = DataLoader(dataset=train_set, num_workers=opt.threads,
-                                  batch_size=opt.batchSize, shuffle=True)
+                         opt.data_augmentation, opt.patch_size, opt.padding, v_freq=5)
+data_loader = DataLoader(dataset=train_set, batch_size=opt.batchSize,
+                         shuffle=True, num_workers=opt.threads,
+                         collate_fn=train_set.collate_fn)
 
 print('===> Building model ', opt.model_type)
 if opt.model_type == 'EDVR':
@@ -147,5 +150,4 @@ for epoch in range(opt.start_epoch, opt.nEpochs + 1):
 - lr 的更新
 - batch size
 - patch size
-- data augmentation 何时增强数据
 """
