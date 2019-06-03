@@ -46,6 +46,9 @@ class YoukuDataset(data.Dataset):
                           constant_values=(0, 0))
             hr = np.pad(hr, ((0, 0), (pad_size[0] * 4, pad_size[1] * 4), (0, 0)), 'constant',
                         constant_values=(0, 0))
+            if hr.shape[-1] == 2048:
+                hr = hr[:, 32:1120, 64:1984]
+                imgs = imgs[:, :, 8:280, 16:496]
         else:  # patch
             imgs, hr = get_patch(imgs, hr, self.patch_size)
             imgs = np.stack(imgs, axis=0)

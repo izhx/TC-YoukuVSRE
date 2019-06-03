@@ -63,7 +63,7 @@ def train(e):
         batches_done = len(data_loader) * e + batch_i
         if cuda:
             lr_seq = Variable(lr_seq, requires_grad=True).cuda(gpus_list[0])
-            gt = Variable(gt, requires_grad=False).cuda(gpus_list[0])
+            gt = Variable(gt, requires_grad=True).cuda(gpus_list[0])
 
         optimizer.zero_grad()
         t0 = time.time()
@@ -100,7 +100,7 @@ def eval():
     model.eval()
     for batch_i, (lr_seq, gt) in enumerate(data_loader):
         if cuda:
-            lr_seq = Variable(lr_seq, requires_grad=True).cuda(gpus_list[0])
+            lr_seq = Variable(lr_seq, requires_grad=False).cuda(gpus_list[0])
             gt = Variable(gt, requires_grad=False).cuda(gpus_list[0])
 
         optimizer.zero_grad()
@@ -155,7 +155,7 @@ else:
 if cuda:
     model = torch.nn.DataParallel(model, device_ids=gpus_list)
 
-criterion = CharbonnierLoss(reduce=True)
+criterion = CharbonnierLoss()
 
 if opt.pretrained:
     model_name = os.path.join(opt.save_folder + opt.pretrained_sr)

@@ -4,6 +4,8 @@ import glob
 import time
 import cv2
 import numpy as np
+from collections import Counter
+from data.youku import YoukuDataset
 
 
 def read_y4m(file_path, mode="444"):
@@ -55,6 +57,7 @@ def convert(data_dir, cut=False):
     对文件夹目录下所有y4m文件分帧按文件夹存放。
     :param data_dir: data dir
     """
+    nsh, nsl = np.array([1088, 1920]), np.array([272, 480])
     t0 = time.time()
     path_list = glob.glob(f"{data_dir}/*.y4m")
     print("There are", len(path_list), "y4m videos in ", data_dir)
@@ -62,6 +65,30 @@ def convert(data_dir, cut=False):
         v_name = os.path.basename(v_path)[:-4]
         print("\r" + f"Processing {v_name}.  {i / len(path_list):.2%}", end="")
         frames, header = read_y4m(v_path)
+        shape = np.array(frames.shape[1:3])
+        if b'W2048' in header:
+            p = (shape - nsh) >> 1
+            q = p + nsh
+            header.replace(b'W2048', b'W1920')
+            header.replace(b'H1152', b'H1088')
+            frames = frames[:, p[0]:q[0], p[1]:q[1], :]
+        elif b'W512' in header:
+            p = (shape - nsl) >> 1
+            q = p + nsl
+            header.replace(b'W512', b'W480')
+            header.replace(b'H288', b'H272')
+            frames = frames[:, p[0]:q[0], p[1]:q[1], :]
+        elif b'W1920' in header:
+            header.replace(b'W2048', b'W1920')
+            header.replace(b'H1152', b'H1088')
+            frames = np.pad(frames, ((0, 0), (8, 0), (0, 0), (0, 0)),
+                            'constant', constant_values=(0, 0))
+        elif b'W480' in header:
+            header.replace(b'W512', b'W480')
+            header.replace(b'H288', b'H272')
+            frames = np.pad(frames, ((0, 0), (2, 0), (0, 0), (0, 0)),
+                            'constant', constant_values=(0, 0))
+        # print(f'{v_name}   {frames.shape} \n')
         fid_len = len(str(len(frames) - 1))
         if cut:  # todo 转场分割
             scenarios = [frames]
@@ -142,13 +169,30 @@ def yuv444to420p(img: np.ndarray, inter=cv2.INTER_LINEAR) -> np.ndarray:
     return np.concatenate([y.reshape(-1), u.reshape(-1), v.reshape(-1)])
 
 
+def test():
+    c = list()
+    cao = list()
+    path_list = glob.glob(f"D:\\DATA\\train\\*.y4m")
+    for file_path in path_list:
+        with open(file_path, 'rb') as fp:
+            header = fp.readline().split()
+            if header[1] == b"W512" or header[1] == b"W2048":
+                cao.append(os.path.basename(file_path))
+            c.append(header[1] + header[2])
+    c = Counter(c)
+
+    return
+
+
 if __name__ == '__main__':
     # yk = YoukuDataset("../dataset/train", 4, 5, True, 31, "new_info")
     DIR = "../dataset/train"
     # imgs, _ = read_y4m("../dataset/train/Youku_00000_l.y4m")
     # fs = [yuv444to420p(i) for i in imgs]
     # save_y4m(fs, "../dataset/train/Youku_00000_l/header.txt", "../results/Youku_00000_l.y4m")
-    # yk = YoukuDataset("../dataset/train", 4, 5, True, 31, "new_info")
+    # yk = YoukuDataset("../dataset/train", 4, 7, False, 64, "new_info")
+    # yk.__getitem__(1)
     convert(DIR)
+    # test()
     pass
     # header: 'signature width height fps interlacing pixelAspectRadio colorSpace comment'
