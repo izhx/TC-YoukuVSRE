@@ -14,12 +14,12 @@ from utils.util import calculate_psnr
 
 parser = argparse.ArgumentParser(description='PyTorch Super Res Example')
 parser.add_argument('--upscale_factor', type=int, default=4, help="super resolution upscale factor")
-parser.add_argument('--batchSize', type=int, default=16, help='training batch size')
+parser.add_argument('--batchSize', type=int, default=8, help='training batch size')
 parser.add_argument("--gradient_accumulations", type=int, default=2, help="number of gradient accumulation before step")
 parser.add_argument('--start_epoch', type=int, default=1, help='Starting epoch for continuing training')
 parser.add_argument('--nEpochs', type=int, default=150, help='number of epochs to train for')
 parser.add_argument('--snapshots', type=int, default=5, help='Snapshots')
-parser.add_argument('--lr', type=float, default=4e-1, help='Learning Rate. Default=0.0004')
+parser.add_argument('--lr', type=float, default=4e-4, help='Learning Rate. Default=0.0004')
 parser.add_argument('--patch_size', type=int, default=64, help='0 to use original frame size')
 parser.add_argument('--v_freq', type=int, default=5, help='每个视频每代出现次数')
 parser.add_argument('--gpu_mode', type=bool, default=True)
@@ -97,11 +97,11 @@ def train(e):
 def eval():
     epoch_loss = 0
     t_psnr = 0
-    model.load_state_dict(torch.load(opt.save_folder+'4x_EDVRyk_epoch_54.pth'))
+    model.load_state_dict(torch.load(opt.save_folder + '4x_EDVRyk_epoch_54.pth'))
     model.eval()
     for batch_i, (lr_seq, gt) in enumerate(data_loader):
         if cuda:
-            lr_seq = Variable(lr_seq, requires_grad=True).cuda(gpus_list[0])
+            lr_seq = Variable(lr_seq, requires_grad=False).cuda(gpus_list[0])
             gt = Variable(gt, requires_grad=False).cuda(gpus_list[0])
 
         optimizer.zero_grad()
@@ -140,7 +140,6 @@ train_set = YoukuDataset(opt.data_dir, opt.upscale_factor, opt.nFrames,
                          opt.data_augmentation, opt.patch_size, opt.padding, v_freq=opt.v_freq)
 eval_set = YoukuDataset(opt.eval_dir, opt.upscale_factor, opt.nFrames,
                         opt.data_augmentation, opt.patch_size, opt.padding, v_freq=opt.v_freq)
-print(train_set.collate_fn)
 data_loader = DataLoader(dataset=train_set, batch_size=opt.batchSize,
                          shuffle=True, num_workers=opt.threads,
                          collate_fn=train_set.collate_fn)
@@ -157,7 +156,7 @@ else:
 if cuda:
     model = torch.nn.DataParallel(model, device_ids=gpus_list)
 
-criterion = CharbonnierLoss(reduce=True)
+criterion = CharbonnierLoss()
 
 if opt.pretrained:
     model_name = os.path.join(opt.save_folder + opt.pretrained_sr)
@@ -169,23 +168,26 @@ if cuda:
     model = model.cuda(gpus_list[0])
     criterion = criterion.cuda(gpus_list[0])
 
-
 optimizer = optim.Adam(model.parameters(), lr=opt.lr, betas=(0.9, 0.999), eps=1e-8)
-eval();
-'''
-for epoch in range(opt.start_epoch, opt.nEpochs + 1):
-    train(epoch)
-    # eval()  # todo 需加入在验证集检验，满足要求停机
 
-    # todo learning rate is decayed by a factor of 10 every half of total epochs
-    if (epoch + 1) % (opt.nEpochs / 2) == 0:
-        for param_group in optimizer.param_groups:
-            param_group['lr'] /= 10.0
-        print(f"Learning rate decay: lr={optimizer.param_groups[0]['lr']}")
+doEval=True
 
-    if (epoch + 1) % opt.snapshots == 0:
-        checkpoint(epoch)
-'''
+if doEval:
+    eval()
+else:
+    for epoch in range(opt.start_epoch, opt.nEpochs + 1):
+        train(epoch)
+        # eval()  # todo 需加入在验证集检验，满足要求停机
+
+        # todo learning rate is decayed by a factor of 10 every half of total epochs
+        if (epoch + 1) % (opt.nEpochs / 2) == 0:
+            for param_group in optimizer.param_groups:
+                param_group['lr'] /= 10.0
+            print(f"Learning rate decay: lr={optimizer.param_groups[0]['lr']}")
+
+        if (epoch + 1) % opt.snapshots == 0:
+            checkpoint(epoch)
+
 """
 需要调节的：
 - nf 默认64，是卷积的通道
