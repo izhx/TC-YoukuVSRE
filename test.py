@@ -141,13 +141,13 @@ def single_test(video_path):
     frames, header = read_y4m(video_path)
     header = header.split()
     frame_num = len(frames)
-    # todo 处理 header
 
     avgpool = torch.nn.AvgPool2d((2, 2), stride=(2, 2))
     frames = np.stack(frames, axis=0)
     size = np.array(frames.shape)[1:3]
-    hr_size = size * fac
     pad_size = (np.ceil(size / 4) * 4 - size).astype(np.int)
+    hr_size, hr_pad = size * fac, pad_size * fac
+    hps = hr_pad + hr_size
     frames = np.pad(frames, ((0, 0), (pad_size[0], pad_size[1]), (0, 0), (0, 0)), 'constant',
                     constant_values=(0, 0))
     imgs = torch.from_numpy(np.ascontiguousarray(frames.transpose((0, 3, 1, 2)))).float()
@@ -163,8 +163,9 @@ def single_test(video_path):
         imgs_in = imgs.index_select(0, torch.LongTensor(select_idx)).unsqueeze(0).to(device)
         output = single_forward(model, imgs_in)
         output_f = output.data.float().cpu().squeeze(0)
+        output_f = output_f[:, hr_pad[0]:hps[0], hr_pad[1]:hps[1]]
         prediction_pool = avgpool(output_f[(1, 2), :, :])
-        # 给出像素  todo 处理padding
+        # 给出像素
         y = convert_channel(output_f[0, :, :])
         u = convert_channel(prediction_pool[0, :, :])
         v = convert_channel(prediction_pool[1, :, :])

@@ -8,7 +8,7 @@ import torch.utils.data as data
 
 
 class YoukuDataset(data.Dataset):
-    def __init__(self, data_dir, upscale_factor, nFrames, augmentation, patch_size, padding, v_freq=2, cut=False):
+    def __init__(self, data_dir, upscale_factor, nFrames, augmentation, patch_size, padding, v_freq=1, cut=False):
         super(YoukuDataset, self).__init__()
         self.upscale_factor = upscale_factor
         self.augmentation = augmentation
@@ -20,7 +20,6 @@ class YoukuDataset(data.Dataset):
             self.paths = [os.path.normpath(v) for v in glob.glob(f"{data_dir}/*_l*") if os.path.isdir(v)] * v_freq
         else:
             self.paths = [os.path.normpath(v) for v in glob.glob(f"{data_dir}/*_l")] * v_freq
-        # self.__getitem__(0)
         return
 
     def __getitem__(self, index):
@@ -40,16 +39,19 @@ class YoukuDataset(data.Dataset):
         if self.augmentation:
             imgs, hr, _ = augment(imgs, hr)
 
-        # TODO get patch
-
-        lr_seq = np.stack(imgs, axis=0)
-        pad_size = (np.ceil(np.array(lr_seq.shape)[1:3] / 4) * 4 - np.array(lr_seq.shape)[1:3]).astype(np.int)
-        lr_seq = np.pad(lr_seq, ((0, 0), (pad_size[0], pad_size[1]), (0, 0), (0, 0)), 'constant',
+        if self.patch_size == 0:  # 不patch，要把图像补齐到4的倍数
+            imgs = np.stack(imgs, axis=0)
+            pad_size = (np.ceil(np.array(imgs.shape)[1:3] / 4) * 4 - np.array(imgs.shape)[1:3]).astype(np.int)
+            imgs = np.pad(imgs, ((0, 0), (pad_size[0], pad_size[1]), (0, 0), (0, 0)), 'constant',
+                          constant_values=(0, 0))
+            hr = np.pad(hr, ((0, 0), (pad_size[0] * 4, pad_size[1] * 4), (0, 0)), 'constant',
                         constant_values=(0, 0))
-        lr_seq = torch.from_numpy(np.ascontiguousarray(lr_seq.transpose((0, 3, 1, 2)))).float()
-        gt = np.ascontiguousarray(np.transpose(hr, (2, 0, 1)))
-        gt = torch.from_numpy(np.pad(gt, ((0, 0), (pad_size[0] * 4, pad_size[1] * 4), (0, 0)), 'constant',
-                                     constant_values=(0, 0))).float()
+        else:  # patch
+            imgs, hr = get_patch(imgs, hr, self.patch_size)
+            imgs = np.stack(imgs, axis=0)
+        # to tensor
+        lr_seq = torch.from_numpy(np.ascontiguousarray(imgs.transpose((0, 3, 1, 2)))).float()
+        gt = torch.from_numpy(np.ascontiguousarray(np.transpose(hr, (2, 0, 1)))).float()
         return lr_seq, gt
 
     def collate_fn(self, batch):
@@ -146,3 +148,17 @@ def rotate(image, angle, center=None, scale=1.0):  # 1
     rm = cv2.getRotationMatrix2D(center, angle, scale)  # 5
     rotated = cv2.warpAffine(image, rm, (w, h))  # 6
     return rotated  # 7
+
+
+def get_patch(lr_seq, hr, patch_size):
+    (h, w, _) = lr_seq[0].shape
+    if patch_size > w or patch_size > h:
+        raise ValueError('图像比patch小')
+    elif patch_size % 4 != 0:
+        raise ValueError('patch size 不是4的倍数')
+
+    x = random.randint(0, w - patch_size)
+    y = random.randint(0, h - patch_size)
+    lr_seq = [lr[y:y + patch_size, x:x + patch_size, :] for lr in lr_seq]
+    hr = hr[y << 2:(y + patch_size) << 2, x << 2:(x + patch_size) << 2, :]
+    return lr_seq, hr
