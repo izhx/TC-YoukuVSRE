@@ -67,8 +67,8 @@ def train(e):
 
         optimizer.zero_grad()
         t0 = time.time()
-        with torch.no_grad():
-            prediction = model(lr_seq)
+        #with torch.no_grad():
+        prediction = model(lr_seq)
 
         # prediction_pool = avgpool(prediction[:, (1, 2), :, :])
         # gt_pool = avgpool(gt[:, (1, 2), :, :])
@@ -170,7 +170,7 @@ if cuda:
 
 optimizer = optim.Adam(model.parameters(), lr=opt.lr, betas=(0.9, 0.999), eps=1e-8)
 
-doEval=True
+doEval=False
 
 if doEval:
     eval()
