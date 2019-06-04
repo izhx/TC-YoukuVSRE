@@ -17,11 +17,12 @@ _BN = {
 
 
 class ConvBlock(torch.nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, padding=1, dilation=1, groups=1, bias=True,
-                 activation='PReLU', norm=None):
+    def __init__(self, in_channels, out_channels, kernel_size=3, stride=1,
+                 padding=1, dilation=1, groups=1, bias=True, activation='PReLU',
+                 norm=None):
         super(ConvBlock, self).__init__()
-        self.conv = torch.nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, dilation, groups,
-                                    bias=bias)
+        self.conv = torch.nn.Conv2d(in_channels, out_channels, kernel_size,
+                                    stride, padding, dilation, groups, bias=bias)
         self.norm = _BN[norm](out_channels)
         self.activation = _ACTIVATION[activation]
 
@@ -38,11 +39,14 @@ class ConvBlock(torch.nn.Module):
 
 
 class DeconvBlock(torch.nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size=4, stride=2, padding=1, output_padding=0, dilation=1,
-                 groups=1, bias=True, activation='PReLU', norm=None):
+    def __init__(self, in_channels, out_channels, kernel_size=4, stride=2,
+                 padding=1, output_padding=0, dilation=1, groups=1, bias=True,
+                 activation='PReLU', norm=None):
         super(DeconvBlock, self).__init__()
-        self.deconv = torch.nn.ConvTranspose2d(in_channels, out_channels, kernel_size, stride, padding, output_padding,
-                                               groups, bias, dilation)
+        self.deconv = torch.nn.ConvTranspose2d(in_channels, out_channels,
+                                               kernel_size, stride, padding,
+                                               output_padding, groups, bias,
+                                               dilation)
         self.norm = _BN[norm](out_channels)
         self.activation = _ACTIVATION[activation]
 

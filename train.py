@@ -14,19 +14,19 @@ from utils.util import calculate_psnr
 
 parser = argparse.ArgumentParser(description='PyTorch Super Res Example')
 parser.add_argument('--upscale_factor', type=int, default=4, help="super resolution upscale factor")
-parser.add_argument('--batchSize', type=int, default=8, help='training batch size')
+parser.add_argument('--batchSize', type=int, default=4, help='training batch size')
 parser.add_argument("--gradient_accumulations", type=int, default=2, help="number of gradient accumulation before step")
 parser.add_argument('--start_epoch', type=int, default=1, help='Starting epoch for continuing training')
 parser.add_argument('--nEpochs', type=int, default=150, help='number of epochs to train for')
 parser.add_argument('--snapshots', type=int, default=5, help='Snapshots')
 parser.add_argument('--lr', type=float, default=4e-4, help='Learning Rate. Default=0.0004')
 parser.add_argument('--patch_size', type=int, default=64, help='0 to use original frame size')
-parser.add_argument('--v_freq', type=int, default=5, help='每个视频每代出现次数')
+parser.add_argument('--v_freq', type=int, default=15, help='每个视频每代出现次数')
 parser.add_argument('--gpu_mode', type=bool, default=True)
 parser.add_argument('--threads', type=int, default=0, help='number of threads for data loader to use')
 parser.add_argument('--seed', type=int, default=123, help='random seed to use. Default=123')
 parser.add_argument('--gpus', default=1, type=int, help='number of gpu')
-parser.add_argument('--data_dir', type=str, default='./dataset/train')
+parser.add_argument('--data_dir', type=str, default='/input/train')
 parser.add_argument('--eval_dir', type=str, default='./dataset/eval', help="验证集文件夹")
 # parser.add_argument('--other_dataset', type=bool, default=False, help="use other dataset than vimeo-90k")
 parser.add_argument('--nFrames', type=int, default=7)
@@ -37,7 +37,7 @@ parser.add_argument('--model_type', type=str, default='EDVR')
 # parser.add_argument('--residual', type=bool, default=False)
 parser.add_argument('--pretrained_sr', default='weights/3x_edvr_epoch_84.pth', help='sr pretrained base model')
 parser.add_argument('--pretrained', type=bool, default=False)
-parser.add_argument('--save_folder', default='weights/', help='Location to save checkpoint models')
+parser.add_argument('--save_folder', default='./weights/', help='Location to save checkpoint models')
 
 opt = parser.parse_args()
 gpus_list = range(opt.gpus)
@@ -67,13 +67,7 @@ def train(e):
 
         optimizer.zero_grad()
         t0 = time.time()
-        #with torch.no_grad():
         prediction = model(lr_seq)
-
-        # prediction_pool = avgpool(prediction[:, (1, 2), :, :])
-        # gt_pool = avgpool(gt[:, (1, 2), :, :])
-        # loss = criterion(prediction[:, 0, :, :], gt[:, 0, :, :]) + criterion(prediction_pool, gt_pool)
-
         loss = criterion(prediction, gt)
         t1 = time.time()
 
@@ -94,7 +88,7 @@ def train(e):
     print(f"===> Epoch {e} Complete: Avg. Loss: {epoch_loss / len(data_loader):.4f}")
 
 
-def eval():
+def eval_func():
     epoch_loss = 0
     t_psnr = 0
     model.load_state_dict(torch.load(opt.save_folder + '4x_EDVRyk_epoch_54.pth'))
@@ -170,10 +164,10 @@ if cuda:
 
 optimizer = optim.Adam(model.parameters(), lr=opt.lr, betas=(0.9, 0.999), eps=1e-8)
 
-doEval=False
+doEval = False
 
 if doEval:
-    eval()
+    eval_func()
 else:
     for epoch in range(opt.start_epoch, opt.nEpochs + 1):
         train(epoch)

@@ -59,7 +59,7 @@ def convert(data_dir, cut=False):
     """
     nsh, nsl = np.array([1088, 1920]), np.array([272, 480])
     t0 = time.time()
-    path_list = glob.glob(f"{data_dir}/*.y4m")
+    path_list = sorted(glob.glob(f"{data_dir}/*.y4m"))
     print("There are", len(path_list), "y4m videos in ", data_dir)
     for i, v_path in enumerate(path_list, 1):
         v_name = os.path.basename(v_path)[:-4]
@@ -185,14 +185,13 @@ def test():
 
 
 if __name__ == '__main__':
-    # yk = YoukuDataset("../dataset/train", 4, 5, True, 31, "new_info")
-    DIR = "../dataset/train"
+    DIR = "/input/train"
     # imgs, _ = read_y4m("../dataset/train/Youku_00000_l.y4m")
     # fs = [yuv444to420p(i) for i in imgs]
     # save_y4m(fs, "../dataset/train/Youku_00000_l/header.txt", "../results/Youku_00000_l.y4m")
-    # yk = YoukuDataset("../dataset/train", 4, 7, False, 64, "new_info")
-    # yk.__getitem__(1)
-    convert(DIR)
+    # yk = YoukuDataset(DIR, 4, 7, False, 64, "new_info")
+    # yk.__getitem__(0)
+    # convert(DIR)
     # test()
     pass
     # header: 'signature width height fps interlacing pixelAspectRadio colorSpace comment'

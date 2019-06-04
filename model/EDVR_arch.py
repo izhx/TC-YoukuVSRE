@@ -255,18 +255,6 @@ class EDVR(nn.Module):
         # activation function
         self.lrelu = nn.LeakyReLU(negative_slope=0.1, inplace=True)
 
-        # kaiming normal
-        for m in self.modules():
-            classname = m.__class__.__name__
-            if classname.find('Conv2d') != -1:
-                torch.nn.init.kaiming_normal_(m.weight)
-                if m.bias is not None:
-                    m.bias.data.zero_()
-            elif classname.find('ConvTranspose2d') != -1:
-                torch.nn.init.kaiming_normal_(m.weight)
-                if m.bias is not None:
-                    m.bias.data.zero_()
-
         return
 
     def forward(self, x):

@@ -8,7 +8,7 @@ import torch.utils.data as data
 
 
 class YoukuDataset(data.Dataset):
-    def __init__(self, data_dir, upscale_factor, nFrames, augmentation, patch_size, padding, v_freq=1, cut=False):
+    def __init__(self, data_dir, upscale_factor, nFrames, augmentation, patch_size, padding, v_freq=10, cut=False):
         super(YoukuDataset, self).__init__()
         self.upscale_factor = upscale_factor
         self.augmentation = augmentation
@@ -23,7 +23,7 @@ class YoukuDataset(data.Dataset):
         return
 
     def __getitem__(self, index):
-        frame_paths = glob.glob(f"{self.paths[index]}\\*.npy")
+        frame_paths = sorted(glob.glob(f"{self.paths[index]}/*.npy"))
         # 随机抽帧
         if len(frame_paths) >= self.nFrames:
             ref_id = random.randint(3, len(frame_paths) - 4)
@@ -57,7 +57,8 @@ class YoukuDataset(data.Dataset):
         gt = torch.from_numpy(np.ascontiguousarray(np.transpose(hr, (2, 0, 1)))).float()
         return lr_seq, gt
 
-    def collate_fn(self, batch):
+    @staticmethod
+    def collate_fn(batch):
         lr_seq, gt = list(zip(*batch))
         return torch.stack(lr_seq), torch.stack(gt)
 
@@ -120,7 +121,7 @@ class Error(Exception):
 
 
 def read_npy(path):
-    return np.load(path).astype(np.float32) / 255
+    return np.load(path).astype(np.float32) / 255.0
 
 
 def augment(lr_seq, hr, flip_h=True, rot=True):
