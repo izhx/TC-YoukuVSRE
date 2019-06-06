@@ -5,6 +5,7 @@ import cv2
 import numpy as np
 import torch
 import torch.utils.data as data
+from .info_list import SCENE
 
 
 class YoukuDataset(data.Dataset):
@@ -16,19 +17,14 @@ class YoukuDataset(data.Dataset):
         self.data_dir = data_dir
         self.nFrames = nFrames
         self.padding = padding
-        if cut:
-            self.paths = [os.path.normpath(v) for v in glob.glob(f"{data_dir}/*_l*") if os.path.isdir(v)] * v_freq
-        else:
-            self.paths = [os.path.normpath(v) for v in glob.glob(f"{data_dir}/*_l")] * v_freq
+        self.paths = [os.path.normpath(v) for v in glob.glob(f"{data_dir}/*_l")] * v_freq
+        self.cut = cut
         return
 
     def __getitem__(self, index):
         frame_paths = sorted(glob.glob(f"{self.paths[index]}/*.npy"))
         # 随机抽帧
-        if len(frame_paths) >= self.nFrames:
-            ref_id = random.randint(3, len(frame_paths) - 4)
-        else:  # 有的太短
-            ref_id = random.randint(0, len(frame_paths))
+        ref_id = random.randint(3, len(frame_paths) - 4)
         # 取数据
         ref_path = frame_paths[ref_id]
         gt_path = f"{ref_path}".replace('_l', '_h_GT')  # 取GT
@@ -73,23 +69,34 @@ class YoukuDataset(data.Dataset):
         padding: replicate | reflection | new_info | circle
         :param file_name: 文件名
         :param padding: 补齐模式
-        :return: 索引序列 [Youku_00000_l-00_100_00_.npy, ...]
+        :return: 索引序列 [Youku_00000_l_100_00_.npy, ...]
         """
         fnl = file_name.split('_')
-        max_n, crt_i = fnl[-3:-1]  # crt_i: 当前帧序号   max_n: 视频帧数
+        vid = 'Youku_' + fnl[-5]
+        crt_i = fnl[-2]  # crt_i: 当前帧序号
         id_len = len(crt_i)
-        max_n, crt_i = int(max_n), int(crt_i)
-        max_n = max_n - 1
+        crt_i = int(crt_i)
+        max_n, min_n = int(fnl[-3]), 0  # max_n: 视频帧数
+        if self.cut:
+            sc = SCENE[vid]
+            for i in range(len(sc)):
+                if sc[i] > crt_i:
+                    max_n = sc[i]
+                    break
+                else:
+                    min_n = sc[i]
+
+        max_n -= 1  # 末尾帧号
         n_pad = self.nFrames // 2
         return_l = []
 
-        if max_n < self.nFrames:
+        if max_n - min_n < self.nFrames:
             padding = 'replicate'
 
         for i in range(crt_i - n_pad, crt_i + n_pad + 1):
-            if i < 0:
+            if i < min_n:
                 if padding == 'replicate':
-                    add_idx = 0
+                    add_idx = min_n
                 elif padding == 'reflection':
                     add_idx = -i
                 elif padding == 'new_info':
@@ -98,7 +105,7 @@ class YoukuDataset(data.Dataset):
                     add_idx = self.nFrames + i
                 else:
                     raise ValueError('Wrong padding mode')
-            elif i >= max_n:
+            elif i > max_n:
                 if padding == 'replicate':
                     add_idx = max_n
                 elif padding == 'reflection':

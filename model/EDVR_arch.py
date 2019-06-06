@@ -165,7 +165,7 @@ class TSA_Fusion(nn.Module):
 
     def forward(self, aligned_fea):
         B, N, C, H, W = aligned_fea.size()  # N video frames
-        #### temporal attention
+        # temporal attention
         emb_ref = self.tAtt_2(aligned_fea[:, self.center, :, :, :].clone())
         emb = self.tAtt_1(aligned_fea.view(-1, C, H, W)).view(B, N, -1, H, W)  # [B, N, C(nf), H, W]
 
@@ -178,10 +178,10 @@ class TSA_Fusion(nn.Module):
         cor_prob = cor_prob.unsqueeze(2).repeat((1, 1, C, 1, 1)).view((B, -1, H, W))
         aligned_fea = aligned_fea.view(B, -1, H, W) * cor_prob
 
-        #### fusion
+        # fusion
         fea = self.lrelu(self.fea_fusion(aligned_fea))
 
-        #### spatial attention
+        # spatial attention
         att = self.lrelu(self.sAtt_1(aligned_fea))
         att_max = self.maxpool(att)
         att_avg = self.avgpool(att)

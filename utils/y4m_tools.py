@@ -52,7 +52,7 @@ def read_y4m(file_path, mode="444"):
     return np.array(frames), header
 
 
-def convert(data_dir, cut=False):
+def convert(data_dir):
     """
     对文件夹目录下所有y4m文件分帧按文件夹存放。
     :param data_dir: data dir
@@ -90,29 +90,15 @@ def convert(data_dir, cut=False):
                             'constant', constant_values=(0, 0))
         # print(f'{v_name}   {frames.shape} \n')
         fid_len = len(str(len(frames) - 1))
-        if cut:  # todo 转场分割
-            scenarios = [frames]
-            for ns, scenario in enumerate(scenarios):
-                s_dir = os.path.normpath(v_path[:-4] + '-' + str(ns).zfill(fid_len))  # 分帧存放文件夹
-                if not os.path.exists(s_dir):
-                    os.makedirs(s_dir)
-                for n, f in enumerate(scenario):
-                    s_d_n = s_dir.split('\\')[-1]
-                    file_name = f"{s_d_n}_{len(scenario)}_{str(n).zfill(fid_len)}_.npy"
-                    img_path = f"{s_dir}/{file_name}"
-                    np.save(img_path, f)
-        else:
-            im_dir = v_path[:-4]  # 分帧存放文件夹
-            if not os.path.exists(im_dir):
-                os.makedirs(im_dir)
-            fid_len = len(str(len(frames) - 1))
-            # save frames
-            for n, f in enumerate(frames):
-                file_name = f"{v_name}_{len(frames)}_{str(n).zfill(fid_len)}_.npy"
-                img_path = f"{im_dir}/{file_name}"
-                np.save(img_path, f)
-        with open(v_path.replace('y4m', 'txt'), 'wb') as f:
-            f.write(header)
+        im_dir = v_path[:-4]  # 分帧存放文件夹
+        if not os.path.exists(im_dir):
+            os.makedirs(im_dir)
+        fid_len = len(str(len(frames) - 1))
+        # save frames
+        for n, f in enumerate(frames):
+            file_name = f"{v_name}_{len(frames)}_{str(n).zfill(fid_len)}_.npy"
+            img_path = f"{im_dir}/{file_name}"
+            np.save(img_path, f)
     else:
         t1 = time.time()
         print(f"\rSuccessful converted {len(path_list)} videos in {t1 - t0:.4f} sec.", end="")
@@ -185,13 +171,13 @@ def test():
 
 
 if __name__ == '__main__':
-    DIR = "/input/train"
+    DIR = r"D:\DATA\train"
     # imgs, _ = read_y4m("../dataset/train/Youku_00000_l.y4m")
     # fs = [yuv444to420p(i) for i in imgs]
     # save_y4m(fs, "../dataset/train/Youku_00000_l/header.txt", "../results/Youku_00000_l.y4m")
-    # yk = YoukuDataset(DIR, 4, 7, False, 64, "new_info")
-    # yk.__getitem__(0)
     # convert(DIR)
+    yk = YoukuDataset(DIR, 4, 7, False, 64, "new_info", v_freq=5, cut=True)
+    yk.__getitem__(0)
     # test()
     pass
     # header: 'signature width height fps interlacing pixelAspectRadio colorSpace comment'
