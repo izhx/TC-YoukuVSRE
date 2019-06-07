@@ -90,7 +90,7 @@ class YoukuDataset(data.Dataset):
         n_pad = self.nFrames // 2
         return_l = []
 
-        if max_n - min_n + 1 < self.nFrames:
+        if max_n - min_n < self.nFrames:
             padding = 'replicate'
 
         for i in range(crt_i - n_pad, crt_i + n_pad + 1):
