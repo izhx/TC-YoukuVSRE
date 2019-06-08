@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.backends.cudnn as cudnn
 from torch.autograd import Variable
 
-# from model.EDVR_arch import EDVR, CharbonnierLoss
+from model.EDVR_arch import EDVR
 from utils.y4m_tools import read_y4m, save_y4m
 from continue_clip import cut_clips
 
@@ -26,7 +26,7 @@ parser.add_argument('--data_augmentation', type=bool, default=False)
 parser.add_argument('--padding', type=str, default="reflection",
                     help="padding: replicate | reflection | new_info | circle")
 parser.add_argument('--model_type', type=str, default='EDVR')
-parser.add_argument('--pretrained_sr', default='weights/4x_edvr_epoch.pth', help='sr pretrained base model')
+parser.add_argument('--pretrained_sr', default='weights/4x_EDVRyk_epoch_139.pth', help='sr pretrained base model')
 parser.add_argument('--pretrained', type=bool, default=False)
 parser.add_argument('--result_dir', default='./results', help='Location to save result.')
 
@@ -125,7 +125,6 @@ def index_generation(crt_i, max_n, N, padding='reflection'):
 def single_test(video_path):
     fac = opt.upscale_factor
     frames, header = read_y4m(video_path)
-    # print(header)
     header = header.split()
     frame_num = len(frames)
     # scenes, _ = cut_clips(frames)
@@ -168,7 +167,6 @@ def single_test(video_path):
     header[2] = b'H' + str(hr_size[0]).encode()
     save_path = f'{opt.result_dir}/{os.path.basename(video_path).replace("_l", "_h_Res")}'
     header = b' '.join(header) + b'\n'
-    # print(header)
     save_y4m(hr_frames, header, save_path)
     return
 
