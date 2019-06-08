@@ -2,7 +2,7 @@ import cv2 as cv
 import numpy as np
 from skimage.measure import compare_ssim
 
-
+###接口函数为is_continue()、continue_frames()、cut_clips(）
 def matches(current, next):
     queryImage = current
     trainingImage = next  # 读取要匹配的灰度照片
@@ -112,7 +112,11 @@ def is_continue_withlog(current, next, log_file):
         return True, condition
 
 
-# 以下为接口函数
+###################################################
+################## 以下为接口函数 ##################
+###################################################
+
+
 def is_continue(current, next):  # 判断两帧是否连续，输入两帧
     sum_current_matches = matches(current, current)
     sum_next_matches = matches(current, next)
