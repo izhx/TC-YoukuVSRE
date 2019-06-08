@@ -116,7 +116,7 @@ def save_y4m(yuv420p_imgs, header, save_path):
         v.write(header)
         for frame in yuv420p_imgs:
             v.write(b'FRAME\n')
-            v.write(frame.tobytes())
+            v.write(frame.tostring())
     return
 
 
