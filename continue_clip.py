@@ -2,7 +2,7 @@ import cv2 as cv
 import numpy as np
 from skimage.measure import compare_ssim
 
-###接口函数为is_continue()、continue_frames()、cut_clips(）
+####### 接口函数为is_continue()、continue_frames()、cut_clips() #######
 def matches(current, next):
     queryImage = current
     trainingImage = next  # 读取要匹配的灰度照片
