@@ -128,7 +128,7 @@ def single_test(video_path):
     header = header.split()
     frame_num = len(frames)
     # scenes, _ = cut_clips(frames)
-    back = np.stack(frames).copy()
+    # back = np.stack(frames).copy()
     scenes = [frames]
     avgpool = torch.nn.AvgPool2d((2, 2), stride=(2, 2))
 
@@ -139,22 +139,29 @@ def single_test(video_path):
 
     def convert_channel(ch: torch.tensor):
         ch = ch.numpy().flatten()
-        ch = (ch * 255).astype(np.uint8)
+        ch = (ch * 255).round().astype(np.uint8)
+        # Important. Unlike MATLAB, numpy.unit8() WILL NOT round by default.
         return ch
 
     hr_frames = list()
     for frames in scenes:
+        # 归一化
+        frames = frames.astype(np.float32)
+        for i in range(len(frames)):
+            img = frames[i]
+            _min, _max = img.min(), img.max()
+            frames[i] = (img - _min) / (_max - _min)
+        # 预处理
         frames = np.stack(frames, axis=0)
         frames = np.pad(frames, ((0, 0), (pad_size[0], pad_size[1]), (0, 0), (0, 0)), 'constant',
                         constant_values=(0, 0))
         imgs = torch.from_numpy(np.ascontiguousarray(frames.transpose((0, 3, 1, 2)))).float()
-
+        # 单帧超分
         for i in range(frame_num):
             select_idx = index_generation(i, frame_num, opt.nFrames, padding=opt.padding)
             imgs_in = imgs.index_select(0, torch.LongTensor(select_idx)).unsqueeze(0).to(device)
             output = single_forward(model, imgs_in)
             output_f = output.data.float().cpu().squeeze(0)
-            # output_f = imgs_in[0][3]
             output_f = output_f[:, hr_pad[0]:hps[0], hr_pad[1]:hps[1]]
             prediction_pool = avgpool(output_f)
             # 给出像素
