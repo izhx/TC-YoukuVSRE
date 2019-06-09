@@ -123,6 +123,50 @@ class YoukuDataset(data.Dataset):
         return return_l
 
 
+class SISRDataset(data.Dataset):
+    def __init__(self, data_dir, scale, augmentation, patch_size, v_freq=10):
+        super(SISRDataset, self).__init__()
+        self.scale = scale
+        self.augmentation = augmentation
+        self.patch_size = patch_size
+        self.data_dir = data_dir
+        self.paths = [v for v in glob.glob(f"{data_dir}/*_l")] * v_freq
+        return
+
+    def __getitem__(self, index):
+        frame_paths = sorted(glob.glob(f"{self.paths[index]}/*.npy"))
+        # 随机抽帧
+        lr_id = random.randint(0, len(frame_paths))
+        # 取数据
+        lr_path = frame_paths[lr_id]
+        gt_path = f"{lr_path}".replace('_l', '_h_GT')  # 取GT
+        imgs = [read_npy(lr_path)]
+        hr = read_npy(gt_path)
+
+        if self.augmentation:
+            imgs, hr, _ = augment(imgs, hr)
+
+        if self.patch_size != 0:
+            imgs, hr = get_patch(imgs, hr, self.patch_size)
+
+        lr = imgs[0]
+        # to tensor  TODO
+        lr = torch.from_numpy(np.ascontiguousarray(lr.transpose((2, 0, 1)))).float()
+        gt = torch.from_numpy(np.ascontiguousarray(hr.transpose((2, 0, 1)))).float()
+        return lr, gt
+
+    @staticmethod
+    def collate_fn(batch):
+        lr, gt = list(zip(*batch))
+        return torch.stack(lr), torch.stack(gt)
+
+    def __len__(self):
+        return len(self.paths)
+
+    def __add__(self, other):
+        return data.dataset.ConcatDataset([self, other])
+
+
 class Error(Exception):
     pass
 
@@ -173,3 +217,20 @@ def get_patch(lr_seq, hr, patch_size):
     lr_seq = [lr[y:y + patch_size, x:x + patch_size, :] for lr in lr_seq]
     hr = hr[y << 2:(y + patch_size) << 2, x << 2:(x + patch_size) << 2, :]
     return lr_seq, hr
+
+
+def augment2(*args, h_flip=True, rot=True):
+    h_flip = h_flip and random.random() < 0.5
+    v_flip = rot and random.random() < 0.5
+    rot90 = rot and random.random() < 0.5
+
+    def _augment(img):
+        if h_flip:
+            img = img[:, ::-1, :]
+        if v_flip:
+            img = img[::-1, :, :]
+        if rot90:
+            img = img.transpose(1, 0, 2)
+        return img
+
+    return [_augment(a) for a in args]
