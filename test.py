@@ -199,7 +199,7 @@ def single_test(video_path):
         for i, f in enumerate(hr_frames):
             if i % 25 == 0:
                 thin_frames.append(f)
-        save_y4m(thin_frames, header, save_path)
+        save_y4m(thin_frames, header, save_path.replace('_h', '_h_Sub25'))
     else:  # 存完整的
         save_y4m(hr_frames, header, save_path)
     t1 = time.time()
