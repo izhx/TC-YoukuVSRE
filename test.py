@@ -141,8 +141,9 @@ def single_test(video_path):
     t0 = time.time()
     frames, header = read_y4m(video_path)
     header = header.split()
+    vid = os.path.basename(video_path)[:-6]
     # 转场切分
-    scl = SCENE[os.path.basename(video_path)[:-4]]
+    scl = SCENE[vid]
     scenes = list()
     for i in range(1, len(scl)):
         scenes.append(frames[scl[i - 1]:scl[i], :, :, :])
@@ -191,7 +192,16 @@ def single_test(video_path):
     header[2] = b'H' + str(hr_size[0]).encode()
     save_path = f'{opt.result_dir}/{os.path.basename(video_path).replace("_l", "_h_Res")}'
     header = b' '.join(header) + b'\n'
-    save_y4m(hr_frames, header, save_path)
+
+    # 后9/10抽帧存储
+    if int(vid[6:]) > 204:
+        thin_frames = list()
+        for i, f in enumerate(hr_frames):
+            if i % 25 == 0:
+                thin_frames.append(f)
+        save_y4m(thin_frames, header, save_path)
+    else:  # 存完整的
+        save_y4m(hr_frames, header, save_path)
     t1 = time.time()
     print(f'One video saved: {save_path}, timer: {(t1 - t0):.4f} sec.')
     return
