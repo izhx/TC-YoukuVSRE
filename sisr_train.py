@@ -15,13 +15,14 @@ from utils.util import calculate_psnr
 
 # Training settings
 parser = argparse.ArgumentParser(description='PyTorch Super Res Example')
-parser.add_argument('--scale', type=int, default=4, required=True, help="super resolution upscale factor")
-parser.add_argument('--batchSize', type=int, default=64, help='training batch size')
+parser.add_argument('--scale', type=int, default=4, help="super resolution upscale factor")
+parser.add_argument('--batchSize', type=int, default=4, help='training batch size')
 parser.add_argument('--testBatchSize', type=int, default=10, help='testing batch size')
-parser.add_argument('--nEpochs', type=int, default=2, help='number of epochs to train for')
+parser.add_argument('--nEpochs', type=int, default=100, help='number of epochs to train for')
+parser.add_argument('--start_epoch', type=int, default=1, help='Starting epoch for continuing training')
 parser.add_argument('--lr', type=float, default=0.01, help='Learning Rate. Default=0.01')
-parser.add_argument('--cuda', type=bool, default=False, action='store_true', help='use cuda?')
-parser.add_argument('--threads', type=int, default=4, help='number of threads for data loader to use')
+parser.add_argument('--cuda', type=bool, default=False, help='use cuda?')
+parser.add_argument('--threads', type=int, default=0, help='number of threads for data loader to use')
 parser.add_argument('--seed', type=int, default=123, help='random seed to use. Default=123')
 parser.add_argument('--pretrained_sr', default='weights/3x_edvr_epoch_84.pth', help='sr pretrained base model')
 parser.add_argument('--pretrained', type=bool, default=False)
@@ -30,11 +31,11 @@ parser.add_argument('--save_folder', default='./weights/', help='Location to sav
 # Hardware specifications
 parser.add_argument('--n_GPUs', type=int, default=1, help='number of GPUs')
 # Data specifications
-parser.add_argument('--data_dir', type=str, default='./dataset', help='dataset directory')
+parser.add_argument('--data_dir', type=str, default='./dataset/train', help='dataset directory')
 parser.add_argument('--patch_size', type=int, default=192, help='output patch size')
 parser.add_argument('--rgb_range', type=int, default=255, help='maximum value of RGB')
 parser.add_argument('--n_colors', type=int, default=3, help='number of color channels to use')
-parser.add_argument('--chop', type=bool, default=False, action='store_true', help='enable memory-efficient forward')
+parser.add_argument('--chop', type=bool, default=False, help='enable memory-efficient forward')
 parser.add_argument('--augmentation', type=bool, default=False)
 parser.add_argument('--v_freq', type=int, default=15, help='每个视频每代出现次数')
 

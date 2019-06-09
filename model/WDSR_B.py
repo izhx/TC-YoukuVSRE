@@ -45,6 +45,8 @@ class MODEL(nn.Module):
 
         self.rgb_mean = torch.autograd.Variable(torch.FloatTensor(
             [args.r_mean, args.g_mean, args.b_mean])).view([1, 3, 1, 1])
+        if args.cuda:
+            self.rgb_mean = self.rgb_mean.cuda()
 
         # define head module
         head = list()
@@ -94,11 +96,11 @@ class MODEL(nn.Module):
         return
 
     def forward(self, x):
-        x = (x - self.rgb_mean.cuda() * 255) / 127.5
+        x = (x - self.rgb_mean * 255) / 127.5
         s = self.skip(x)
         x = self.head(x)
         x = self.body(x)
         x = self.tail(x)
         x += s
-        x = x * 127.5 + self.rgb_mean.cuda() * 255
+        x = x * 127.5 + self.rgb_mean * 255
         return x
