@@ -1,16 +1,17 @@
 import torch
 import torch.nn as nn
 import torch.nn.init as init
+from torch.autograd import Variable
 
 
-class Block(nn.Module):
+class ResBlock(nn.Module):
     def __init__(
             self, n_feats, kernel_size, wn, act=nn.ReLU(True), res_scale=1):
-        super(Block, self).__init__()
+        super(ResBlock, self).__init__()
         self.res_scale = res_scale
         body = list()
-        expand = 6
-        linear = 0.8
+        expand = 6  # todo
+        linear = 0.8  # todo
         body.append(
             wn(nn.Conv2d(n_feats, n_feats * expand, 1, padding=1 // 2)))
         body.append(act)
@@ -43,33 +44,29 @@ class MODEL(nn.Module):
         def wn(x):
             return torch.nn.utils.weight_norm(x)
 
-        self.rgb_mean = torch.autograd.Variable(torch.FloatTensor(
+        self.rgb_mean = Variable(torch.FloatTensor(
             [args.r_mean, args.g_mean, args.b_mean])).view([1, 3, 1, 1])
         if args.cuda:
             self.rgb_mean = self.rgb_mean.cuda()
 
         # define head module
         head = list()
-        head.append(
-            wn(nn.Conv2d(args.n_colors, n_feats, 3, padding=3 // 2)))
+        head.append(wn(nn.Conv2d(args.n_colors, n_feats, 3, padding=3 // 2)))
 
         # define body module
         body = list()
         for i in range(n_resblocks):
             body.append(
-                Block(n_feats, kernel_size, act=act, res_scale=args.res_scale, wn=wn))
+                ResBlock(n_feats, kernel_size, act=act, res_scale=args.res_scale, wn=wn))
 
         # define tail module
         tail = list()
         out_feats = scale * scale * args.n_colors
-        tail.append(
-            wn(nn.Conv2d(n_feats, out_feats, 3, padding=3 // 2)))
+        tail.append(wn(nn.Conv2d(n_feats, out_feats, 3, padding=3 // 2)))
         tail.append(nn.PixelShuffle(scale))
 
         skip = list()
-        skip.append(
-            wn(nn.Conv2d(args.n_colors, out_feats, 5, padding=5 // 2))
-        )
+        skip.append(wn(nn.Conv2d(args.n_colors, out_feats, 5, padding=5 // 2)))
         skip.append(nn.PixelShuffle(scale))
 
         # make object members

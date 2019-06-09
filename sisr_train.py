@@ -43,9 +43,6 @@ parser.add_argument('--v_freq', type=int, default=15, help='每个视频每代�
 parser.add_argument('--model', default='WDSR', help='model name')
 parser.add_argument('--pre_trained', type=bool, default=False, help='pre-trained model directory')
 parser.add_argument('--pre_train_path', type=str, default='', help='pre-trained model directory')
-parser.add_argument('--n_resblocks', type=int, default=16, help='number of residual blocks')
-parser.add_argument('--n_feats', type=int, default=128, help='number of feature maps')
-parser.add_argument('--res_scale', type=float, default=1, help='residual scaling')
 # parser.add_argument('--shift_mean', default=True, help='subtract pixel mean from the input')
 # parser.add_argument('--dilation', type=bool, default=False, action='store_true', help='use dilated convolution')
 parser.add_argument('--precision', type=str, default='single', choices=('single', 'half'),
@@ -53,7 +50,10 @@ parser.add_argument('--precision', type=str, default='single', choices=('single'
 parser.add_argument('--r_mean', type=float, default=0.4488, help='Mean of R Channel')
 parser.add_argument('--g_mean', type=float, default=0.4371, help='Mean of G channel')
 parser.add_argument('--b_mean', type=float, default=0.4040, help='Mean of B channel')
-parser.add_argument('--block_feats', type=int, default=512, help='Mean of B channel')
+parser.add_argument('--n_resblocks', type=int, default=32, help='number of residual blocks')
+parser.add_argument('--n_feats', type=int, default=256, help='number of feature maps')
+# parser.add_argument('--block_feats', type=int, default=512, help='residual block_feats')
+parser.add_argument('--res_scale', type=float, default=1, help='residual scaling')
 
 opt = parser.parse_args()
 cudnn.benchmark = True
@@ -165,9 +165,8 @@ else:
 
 """
 需要调节的：
-- n_resblocks = 16
-- n_feats = 128
-- block_feats = 512
+- n_resblocks = 32
+- n_feats = 256
 - 三个通道均值 mean 从数据中来
 - lr 的更新
 - batch size
