@@ -32,12 +32,9 @@ parser.add_argument('--save_folder', default='./weights/', help='Location to sav
 parser.add_argument('--n_GPUs', type=int, default=1, help='number of GPUs')
 # Data specifications
 parser.add_argument('--data_dir', type=str, default='./dataset/train', help='dataset directory')
-parser.add_argument('--patch_size', type=int, default=64, help='output patch size')
 parser.add_argument('--rgb_range', type=int, default=255, help='maximum value of RGB')
 parser.add_argument('--n_colors', type=int, default=3, help='number of color channels to use')
 parser.add_argument('--chop', type=bool, default=False, help='enable memory-efficient forward')
-parser.add_argument('--augmentation', type=bool, default=False)
-parser.add_argument('--v_freq', type=int, default=15, help='每个视频每代出现次数')
 
 # Model specifications
 parser.add_argument('--model', default='WDSR', help='model name')
@@ -47,13 +44,17 @@ parser.add_argument('--pre_train_path', type=str, default='', help='pre-trained 
 # parser.add_argument('--dilation', type=bool, default=False, action='store_true', help='use dilated convolution')
 parser.add_argument('--precision', type=str, default='single', choices=('single', 'half'),
                     help='FP precision for test (single | half)')
-parser.add_argument('--r_mean', type=float, default=0.4488, help='Mean of R Channel')
-parser.add_argument('--g_mean', type=float, default=0.4371, help='Mean of G channel')
-parser.add_argument('--b_mean', type=float, default=0.4040, help='Mean of B channel')
-parser.add_argument('--n_resblocks', type=int, default=32, help='number of residual blocks')
-parser.add_argument('--n_feats', type=int, default=256, help='number of feature maps')
+
+parser.add_argument('--augmentation', type=bool, default=False)
+parser.add_argument('--v_freq', type=int, default=15, help='每个视频每代出现次数')
+parser.add_argument('--r_mean', type=float, default=0.38824835, help='Mean of R Channel')
+parser.add_argument('--g_mean', type=float, default=0.48927346, help='Mean of G channel')
+parser.add_argument('--b_mean', type=float, default=0.50467293, help='Mean of B channel')
 # parser.add_argument('--block_feats', type=int, default=512, help='residual block_feats')
+parser.add_argument('--n_resblocks', type=int, default=16, help='number of residual blocks')
+parser.add_argument('--n_feats', type=int, default=64, help='number of feature maps')
 parser.add_argument('--res_scale', type=float, default=1, help='residual scaling')
+parser.add_argument('--patch_size', type=int, default=64, help='output patch size')
 
 opt = parser.parse_args()
 cudnn.benchmark = True
@@ -69,7 +70,7 @@ if cuda:
     torch.cuda.manual_seed(opt.seed)
 device = torch.device("cuda" if opt.cuda else "cpu")
 
-print('===> Loading datasets')
+print('===> Loading dataset')
 train_set = SISRDataset(opt.data_dir, opt.scale, opt.augmentation, opt.patch_size, opt.v_freq)
 data_loader = DataLoader(dataset=train_set, num_workers=opt.threads, batch_size=opt.batchSize,
                          shuffle=True)

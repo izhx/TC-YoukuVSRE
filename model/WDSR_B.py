@@ -79,18 +79,13 @@ class MODEL(nn.Module):
         # 初始化权重，参考EDVR
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
-                init.kaiming_normal_(m.weight, a=0, mode='fan_in')
-                m.weight.data *= scale  # for residual block
+                init.xavier_normal(m.weight, gain=init.calculate_gain('relu'))
                 if m.bias is not None:
                     init.normal_(m.bias, 0.0001)
             elif isinstance(m, nn.Linear):
-                init.kaiming_normal_(m.weight, a=0, mode='fan_in')
-                m.weight.data *= scale
+                init.xavier_normal(m.weight, gain=init.calculate_gain('relu'))
                 if m.bias is not None:
                     init.normal_(m.bias, 0.0001)
-            elif isinstance(m, nn.BatchNorm2d):
-                init.constant_(m.weight, 1)
-                init.normal_(m.bias, 0.0001)
         return
 
     def forward(self, x):
