@@ -32,7 +32,7 @@ parser.add_argument('--save_folder', default='./weights/', help='Location to sav
 parser.add_argument('--n_GPUs', type=int, default=1, help='number of GPUs')
 # Data specifications
 parser.add_argument('--data_dir', type=str, default='./dataset/train', help='dataset directory')
-parser.add_argument('--patch_size', type=int, default=192, help='output patch size')
+parser.add_argument('--patch_size', type=int, default=64, help='output patch size')
 parser.add_argument('--rgb_range', type=int, default=255, help='maximum value of RGB')
 parser.add_argument('--n_colors', type=int, default=3, help='number of color channels to use')
 parser.add_argument('--chop', type=bool, default=False, help='enable memory-efficient forward')
@@ -142,9 +142,9 @@ def eval_func():
 
 def checkpoint(epoch_now):
     model_out_path = opt.save_folder + str(opt.scale) + \
-                     "x_WDSRyk_epoch_{}.pth".format(epoch_now)
+                     f"x_WDSRyk_epoch_{epoch_now}.pth"
     torch.save(model.state_dict(), model_out_path)
-    print("Checkpoint saved to {}".format(model_out_path))
+    print(f"Checkpoint saved to {model_out_path}")
 
 
 doEval = False

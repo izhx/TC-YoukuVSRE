@@ -140,8 +140,8 @@ class SISRDataset(data.Dataset):
         # 取数据
         lr_path = frame_paths[lr_id]
         gt_path = f"{lr_path}".replace('_l', '_h_GT')  # 取GT
-        imgs = [read_npy(lr_path)]
-        hr = read_npy(gt_path)
+        imgs = [np.load(lr_path).astype(np.float32)]
+        hr = np.load(gt_path).astype(np.float32)
 
         if self.augmentation:
             imgs, hr, _ = augment(imgs, hr)

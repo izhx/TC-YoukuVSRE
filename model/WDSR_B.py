@@ -65,6 +65,7 @@ class MODEL(nn.Module):
         tail.append(wn(nn.Conv2d(n_feats, out_feats, 3, padding=3 // 2)))
         tail.append(nn.PixelShuffle(scale))
 
+        # define skip module
         skip = list()
         skip.append(wn(nn.Conv2d(args.n_colors, out_feats, 5, padding=5 // 2)))
         skip.append(nn.PixelShuffle(scale))
