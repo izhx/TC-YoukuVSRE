@@ -4,6 +4,7 @@ import time
 import math
 import argparse
 import logging
+import shutil
 import yaml
 
 import torch
@@ -36,6 +37,10 @@ torch.manual_seed(opt['hardware']['seed'])
 if cuda:
     torch.cuda.manual_seed(opt['hardware']['seed'])
 device = torch.device("cuda" if cuda else "cpu")
+
+if not opt['pre_trained']:
+    shutil.rmtree(opt['log_dir'])
+    os.mkdir(opt['log_dir'])
 
 print('===> Loading dataset')
 train_set = SISRDataset(data_dir=opt['data_dir'], augment=opt['augment'],
@@ -109,9 +114,8 @@ def eval_func():
     avg_psnr /= len(data_loader)
     print(f"===> eval Complete: Avg PSNR: {avg_psnr}",
           f", Avg. Loss: {epoch_loss / len(data_loader):.4f}")
-    niter = epoch * len(data_loader)
     with SummaryWriter(log_dir=opt['log_dir'], comment='WDSR')as w:
-        w.add_scalar('eval/PSNR', avg_psnr, niter)
+        w.add_scalar('eval/PSNR', avg_psnr, epoch)
     return avg_psnr
 
 
