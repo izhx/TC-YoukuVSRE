@@ -1,0 +1,32 @@
+# train:
+scale: 4
+nEpochs: 150
+startEpoch: 1
+snapshots: 5
+lr: 0.001
+augment: True
+patch_size: 128
+batch_size: 8
+vFreq: 15
+data_dir: /input/train/
+eval_dir: /input/eval/
+save_dir: ./weights/
+pre_trained: False
+pre_train_path: ./weights/4x_WDSR_R8F64_0.pth
+log_dir: /output
+only_eval: False
+
+hardware:
+  cuda: True
+  n_GPUs: 1
+  threads: 0
+  seed: 123
+
+model: WDSR
+WDSR:
+  r_mean: 0.38824835
+  g_mean: 0.48927346
+  b_mean: 0.50467293
+  n_resblocks: 8
+  n_feats: 64
+  res_scale:  1.0

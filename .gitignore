@@ -1,5 +1,7 @@
+WDSR/
+
 # log
-*.log
+*/log
 
 # weight
 *.pth

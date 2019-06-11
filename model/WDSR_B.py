@@ -29,14 +29,10 @@ class ResBlock(nn.Module):
 
 
 class MODEL(nn.Module):
-    def __init__(self, args):
+    def __init__(self, cuda=True, scale=4, n_res=8, n_feats=64, res_scale=1, n_colors=3,
+                 kernel_size=3, mean=(0.38824835, 0.48927346, 0.50467293)):
         super(MODEL, self).__init__()
         # hyper-params
-        self.args = args
-        scale = args.scale
-        n_resblocks = args.n_resblocks
-        n_feats = args.n_feats
-        kernel_size = 3
         act = nn.ReLU(True)
 
         # wn = lambda x: x
@@ -44,30 +40,28 @@ class MODEL(nn.Module):
         def wn(x):
             return torch.nn.utils.weight_norm(x)
 
-        self.rgb_mean = Variable(torch.FloatTensor(
-            [args.r_mean, args.g_mean, args.b_mean])).view([1, 3, 1, 1])
-        if args.cuda:
+        self.rgb_mean = Variable(torch.FloatTensor(mean)).view([1, 3, 1, 1])
+        if cuda:
             self.rgb_mean = self.rgb_mean.cuda()
 
         # define head module
         head = list()
-        head.append(wn(nn.Conv2d(args.n_colors, n_feats, 3, padding=3 // 2)))
+        head.append(wn(nn.Conv2d(n_colors, n_feats, 3, padding=3 // 2)))
 
         # define body module
         body = list()
-        for i in range(n_resblocks):
-            body.append(
-                ResBlock(n_feats, kernel_size, act=act, res_scale=args.res_scale, wn=wn))
+        for i in range(n_res):
+            body.append(ResBlock(n_feats, kernel_size, wn, act, res_scale))
 
         # define tail module
         tail = list()
-        out_feats = scale * scale * args.n_colors
+        out_feats = scale * scale * n_colors
         tail.append(wn(nn.Conv2d(n_feats, out_feats, 3, padding=3 // 2)))
         tail.append(nn.PixelShuffle(scale))
 
         # define skip module
         skip = list()
-        skip.append(wn(nn.Conv2d(args.n_colors, out_feats, 5, padding=5 // 2)))
+        skip.append(wn(nn.Conv2d(n_colors, out_feats, 5, padding=5 // 2)))
         skip.append(nn.PixelShuffle(scale))
 
         # make object members
@@ -79,11 +73,11 @@ class MODEL(nn.Module):
         # 初始化权重，参考EDVR
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
-                init.xavier_normal(m.weight, gain=init.calculate_gain('relu'))
+                init.xavier_normal_(m.weight, gain=init.calculate_gain('relu'))
                 if m.bias is not None:
                     init.normal_(m.bias, 0.0001)
             elif isinstance(m, nn.Linear):
-                init.xavier_normal(m.weight, gain=init.calculate_gain('relu'))
+                init.xavier_normal_(m.weight, gain=init.calculate_gain('relu'))
                 if m.bias is not None:
                     init.normal_(m.bias, 0.0001)
         return

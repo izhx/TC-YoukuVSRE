@@ -124,10 +124,9 @@ class YoukuDataset(data.Dataset):
 
 
 class SISRDataset(data.Dataset):
-    def __init__(self, data_dir, scale, augmentation, patch_size, v_freq=10):
+    def __init__(self, data_dir, augment, patch_size, v_freq=10):
         super(SISRDataset, self).__init__()
-        self.scale = scale
-        self.augmentation = augmentation
+        self.augment = augment
         self.patch_size = patch_size
         self.data_dir = data_dir
         self.paths = [v for v in glob.glob(f"{data_dir}/*_l")] * v_freq
@@ -136,21 +135,21 @@ class SISRDataset(data.Dataset):
     def __getitem__(self, index):
         frame_paths = sorted(glob.glob(f"{self.paths[index]}/*.npy"))
         # 随机抽帧
-        lr_id = random.randint(0, len(frame_paths))
+        lr_id = random.randint(0, len(frame_paths) - 1)
         # 取数据
         lr_path = frame_paths[lr_id]
         gt_path = f"{lr_path}".replace('_l', '_h_GT')  # 取GT
         imgs = [np.load(lr_path).astype(np.float32)]
         hr = np.load(gt_path).astype(np.float32)
 
-        if self.augmentation:
+        if self.augment:
             imgs, hr, _ = augment(imgs, hr)
 
         if self.patch_size != 0:
             imgs, hr = get_patch(imgs, hr, self.patch_size)
 
         lr = imgs[0]
-        # to tensor  TODO
+        # to tensor
         lr = torch.from_numpy(np.ascontiguousarray(lr.transpose((2, 0, 1)))).float()
         gt = torch.from_numpy(np.ascontiguousarray(hr.transpose((2, 0, 1)))).float()
         return lr, gt
