@@ -1,6 +1,7 @@
 from __future__ import print_function
 import os
 import time
+from datetime import datetime
 import math
 import argparse
 import logging
@@ -38,9 +39,13 @@ if cuda:
     torch.cuda.manual_seed(opt['hardware']['seed'])
 device = torch.device("cuda" if cuda else "cpu")
 
+now = datetime.now()
+tb_dir = f"{opt['log_dir']}/{now.strftime('%m%d-%H%M%S')}" + \
+         f"R{opt[opt['model']]['n_resblocks']}F{opt[opt['model']]['n_feats']}/"
 if not opt['pre_trained']:
     shutil.rmtree(opt['log_dir'])
     os.mkdir(opt['log_dir'])
+    os.mkdir(tb_dir)
 
 print('===> Loading dataset')
 train_set = SISRDataset(data_dir=opt['data_dir'], augment=opt['augment'],
@@ -82,7 +87,7 @@ def train(e):
             print(f"===> Epoch[{e}]({batch_i}/{len(data_loader)}):",
                   f" Loss: {loss.item():.4f} || Timer: {(t1 - t0):.4f} sec.")
             niter = epoch * len(data_loader) + batch_i
-            with SummaryWriter(log_dir=opt['log_dir'], comment='WDSR')as w:
+            with SummaryWriter(log_dir=tb_dir, comment='WDSR')as w:
                 w.add_scalar('Train/Loss', loss.item(), niter)
 
     print(f"===> Epoch {e} Complete: Avg. Loss: {epoch_loss / len(data_loader):.4f}")
@@ -114,7 +119,7 @@ def eval_func():
     avg_psnr /= len(data_loader)
     print(f"===> eval Complete: Avg PSNR: {avg_psnr}",
           f", Avg. Loss: {epoch_loss / len(data_loader):.4f}")
-    with SummaryWriter(log_dir=opt['log_dir'], comment='WDSR')as w:
+    with SummaryWriter(log_dir=tb_dir, comment='WDSR')as w:
         w.add_scalar('eval/PSNR', avg_psnr, epoch)
     return avg_psnr
 
@@ -129,7 +134,7 @@ def psnr_tensor(img1: torch.Tensor, img2: torch.Tensor):
 
 
 def checkpoint(comment=""):
-    save_path = f"{opt['save_dir']}{opt['scale']}x_{opt['model']}_{comment}_{epoch}.pth"
+    save_path = f"{opt['save_dir']}/{opt['scale']}x_{opt['model']}_{comment}_{epoch}.pth"
     torch.save(model.state_dict(), save_path)
     opt['pre_train_path'] = save_path
     opt['pre_trained'] = True
@@ -156,8 +161,8 @@ else:
             eval_func()
 
 # 脚本退出后存储配置
-with open(args.yaml_path, 'w') as f:
-    f.write(yaml.dump(opt))
+with open(args.yaml_path, 'w') as yf:
+    yf.write(yaml.dump(opt))
 
 """
 需要调节的：
