@@ -40,12 +40,13 @@ if cuda:
 device = torch.device("cuda" if cuda else "cpu")
 
 now = datetime.now()
-tb_dir = f"{opt['log_dir']}/{now.strftime('%m%d-%H%M%S')}" + \
-         f"R{opt[opt['model']]['n_resblocks']}F{opt[opt['model']]['n_feats']}/"
-if not opt['pre_trained']:
-    shutil.rmtree(opt['log_dir'])
-    os.mkdir(opt['log_dir'])
-    os.mkdir(tb_dir)
+label = f"{opt['model']}-R{opt[opt['model']]['n_resblocks']}F{opt[opt['model']]['n_feats']}"
+tb_dir = f"{opt['log_dir']}/{now.strftime('%m%d-%H%M-')}{label}/"
+
+# if not opt['pre_trained']:
+#     shutil.rmtree(opt['log_dir'])
+#     os.mkdir(opt['log_dir'])
+#     os.mkdir(tb_dir)
 
 print('===> Loading dataset')
 train_set = SISRDataset(data_dir=opt['data_dir'], augment=opt['augment'],
@@ -86,7 +87,7 @@ def train(e):
         if batch_i % 10 == 0:
             print(f"===> Epoch[{e}]({batch_i}/{len(data_loader)}):",
                   f" Loss: {loss.item():.4f} || Timer: {(t1 - t0):.4f} sec.")
-            niter = epoch * len(data_loader) + batch_i
+            niter = (epoch * len(data_loader) + batch_i) * opt['batch_size']
             with SummaryWriter(log_dir=tb_dir, comment='WDSR')as w:
                 w.add_scalar('Train/Loss', loss.item(), niter)
 
@@ -94,10 +95,10 @@ def train(e):
     return
 
 
-def eval_func():
+def eval_func(only=False):
     epoch_loss = 0
     avg_psnr = 0
-    if opt['pre_trained']:
+    if opt['pre_trained'] and only:
         model.load_state_dict(torch.load(opt['pre_train_path']))
     model.eval()
     for batch_i, batch in enumerate(eval_loader):
@@ -113,12 +114,12 @@ def eval_func():
         epoch_loss += loss.item()
         avg_psnr += _psnr
 
-        print(f"===> eval({batch_i}/{len(data_loader)}):  PSNR: {_psnr:.4f}",
+        print(f"===> eval({batch_i}/{len(eval_loader)}):  PSNR: {_psnr:.4f}",
               f" Loss: {loss.item():.4f} || Timer: {(t1 - t0):.4f} sec.")
 
-    avg_psnr /= len(data_loader)
+    avg_psnr /= len(eval_loader)
     print(f"===> eval Complete: Avg PSNR: {avg_psnr}",
-          f", Avg. Loss: {epoch_loss / len(data_loader):.4f}")
+          f", Avg. Loss: {epoch_loss / len(eval_loader):.4f}")
     with SummaryWriter(log_dir=tb_dir, comment='WDSR')as w:
         w.add_scalar('eval/PSNR', avg_psnr, epoch)
     return avg_psnr
@@ -134,7 +135,7 @@ def psnr_tensor(img1: torch.Tensor, img2: torch.Tensor):
 
 
 def checkpoint(comment=""):
-    save_path = f"{opt['save_dir']}/{opt['scale']}x_{opt['model']}_{comment}_{epoch}.pth"
+    save_path = f"{opt['save_dir']}/{opt['scale']}x_{comment}_{epoch}.pth"
     torch.save(model.state_dict(), save_path)
     opt['pre_train_path'] = save_path
     opt['pre_trained'] = True
@@ -146,7 +147,7 @@ def checkpoint(comment=""):
 doEval = opt['only_eval']
 
 if doEval:
-    eval_func()
+    eval_func(opt['only_eval'])
 else:
     for epoch in range(opt['startEpoch'], opt['nEpochs'] + 1):
         train(epoch)
@@ -157,7 +158,7 @@ else:
             print(f"Learning rate decay: lr={optimizer.param_groups[0]['lr']}")
 
         if (epoch + 1) % opt['snapshots'] == 0:
-            checkpoint(f"R{opt[opt['model']]['n_resblocks']}F{opt[opt['model']]['n_feats']}")
+            checkpoint(label)
             eval_func()
 
 # 脚本退出后存储配置
