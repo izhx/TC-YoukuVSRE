@@ -23,8 +23,8 @@ parser = argparse.ArgumentParser(description='PyTorch Super Res Example')
 parser.add_argument('--yaml_path', type=str, default="./settings.yaml", help='配置文件路径')
 
 args = parser.parse_args()
-with open(args.yaml_path, 'r') as f:
-    opt = yaml.load(f)
+with open(args.yaml_path, 'r') as yf:
+    opt = yaml.load(yf)
 cudnn.benchmark = True
 cuda = opt['hardware']['cuda']
 logger = logging.getLogger('base')
@@ -59,7 +59,8 @@ eval_loader = DataLoader(dataset=eval_set, num_workers=opt['hardware']['threads'
                          shuffle=True)
 
 print('===> Building model')
-model = MODEL(cuda).to(device)
+model = MODEL(cuda, n_res=opt['WDSR']['n_resblocks'], n_feats=opt['WDSR']['n_feats'],
+              res_scale=opt['WDSR']['res_scale']).to(device)
 criterion = nn.L1Loss().to(device)
 
 optimizer = optim.Adam(model.parameters(), lr=opt['lr'], betas=(0.9, 0.999), eps=1e-8)

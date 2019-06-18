@@ -124,23 +124,43 @@ class YoukuDataset(data.Dataset):
 
 
 class SISRDataset(data.Dataset):
-    def __init__(self, data_dir, augment, patch_size, v_freq=10):
+    def __init__(self, data_dir, augment, patch_size, v_freq=10, preload=False):
         super(SISRDataset, self).__init__()
         self.augment = augment
         self.patch_size = patch_size
         self.data_dir = data_dir
-        self.paths = [v for v in glob.glob(f"{data_dir}/*_l")] * v_freq
+        self.preload = preload
+        self.paths = [v for v in glob.glob(f"{data_dir}/*_l")]
+        self.data = list()
+        if preload:
+            for vd in self.paths:
+                frame_paths = sorted(glob.glob(f"{vd}/*.npy"))
+                ids = np.random.randint(0, len(frame_paths), [v_freq])
+                lr_paths = [frame_paths[i] for i in range(len(frame_paths)) if i in ids]
+                for lrp in lr_paths:
+                    lr = np.load(lrp)
+                    gt = np.load(lrp.replace('_l', '_h_GT'))
+                    vid = os.path.basename(lrp)[:11]
+                    self.data.append((vid, lr, gt))
+            random.shuffle(self.data)
+        else:
+            self.paths = self.paths * v_freq
+            random.shuffle(self.paths)
         return
 
     def __getitem__(self, index):
-        frame_paths = sorted(glob.glob(f"{self.paths[index]}/*.npy"))
-        # 随机抽帧
-        lr_id = random.randint(0, len(frame_paths) - 1)
-        # 取数据
-        lr_path = frame_paths[lr_id]
-        gt_path = f"{lr_path}".replace('_l', '_h_GT')  # 取GT
-        imgs = [np.load(lr_path).astype(np.float32)]
-        hr = np.load(gt_path).astype(np.float32)
+        if self.preload:
+            imgs = [self.data[index][1].astype(np.float32)]
+            hr = self.data[index][2].astype(np.float32)
+        else:
+            frame_paths = sorted(glob.glob(f"{self.paths[index]}/*.npy"))
+            # 随机抽帧
+            lr_id = random.randint(0, len(frame_paths) - 1)
+            # 取数据
+            lr_path = frame_paths[lr_id]
+            gt_path = f"{lr_path}".replace('_l', '_h_GT')  # 取GT
+            imgs = [np.load(lr_path).astype(np.float32)]
+            hr = np.load(gt_path).astype(np.float32)
 
         if self.augment:
             imgs, hr, _ = augment(imgs, hr)
