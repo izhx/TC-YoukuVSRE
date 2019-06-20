@@ -47,7 +47,7 @@ avgpool = torch.nn.AvgPool2d((2, 2), stride=(2, 2))
 
 
 def single_test(video_path):
-    fac = opt.upscale_factor
+    fac = opt['scale']
     print(f'Processing: {video_path}')
     t0 = time.time()
     frames, header = read_y4m(video_path)
@@ -93,7 +93,7 @@ def single_test(video_path):
 
     header[1] = b'W' + str(hr_size[1]).encode()
     header[2] = b'H' + str(hr_size[0]).encode()
-    save_path = f'{opt.result_dir}/{os.path.basename(video_path).replace("_l", "_h_Res")}'
+    save_path = f'{opt["result_dir"]}/{os.path.basename(video_path).replace("_l", "_h_Res")}'
     header = b' '.join(header) + b'\n'
 
     # 后9/10抽帧存储

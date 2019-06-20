@@ -4,6 +4,7 @@ batch_size: 16
 data_dir: /input/train/
 eval_dir: /input/eval/
 test_dir: /input/test/
+result_dir: /data/result/
 hardware: {cuda: true, n_GPUs: 1, seed: 123, threads: 0}
 log_dir: /output
 lr: 0.001
