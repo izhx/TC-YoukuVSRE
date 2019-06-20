@@ -135,9 +135,9 @@ class SISRDataset(data.Dataset):
         if preload:
             for vd in self.paths:
                 frame_paths = sorted(glob.glob(f"{vd}/*.npy"))
-                ids = np.random.randint(0, len(frame_paths), [v_freq])
-                lr_paths = [frame_paths[i] for i in range(len(frame_paths)) if i in ids]
-                for lrp in lr_paths:
+                # ids = np.random.randint(0, len(frame_paths), [v_freq])
+                # lr_paths = [frame_paths[i] for i in range(len(frame_paths)) if i in ids]
+                for lrp in frame_paths:
                     lr = np.load(lrp)
                     gt = np.load(lrp.replace('_l', '_h_GT'))
                     vid = os.path.basename(lrp)[:11]
