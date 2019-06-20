@@ -180,6 +180,8 @@ class SISRDataset(data.Dataset):
         return torch.stack(lr), torch.stack(gt)
 
     def __len__(self):
+        if self.preload:
+            return len(self.data)
         return len(self.paths)
 
     def __add__(self, other):

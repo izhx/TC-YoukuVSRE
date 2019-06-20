@@ -12,6 +12,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
+import torch.optim.lr_scheduler as lr_scheduler
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
@@ -43,11 +44,6 @@ now = datetime.now()
 label = f"{opt['model']}-R{opt[opt['model']]['n_resblocks']}F{opt[opt['model']]['n_feats']}"
 tb_dir = f"{opt['log_dir']}/{now.strftime('%m%d-%H%M-')}{label}/"
 
-# if not opt['pre_trained']:
-#     shutil.rmtree(opt['log_dir'])
-#     os.mkdir(opt['log_dir'])
-#     os.mkdir(tb_dir)
-
 print('===> Loading dataset')
 train_set = SISRDataset(data_dir=opt['data_dir'], augment=opt['augment'],
                         patch_size=opt['patch_size'], v_freq=opt['vFreq'])
@@ -65,12 +61,17 @@ criterion = nn.L1Loss().to(device)
 
 optimizer = optim.Adam(model.parameters(), lr=opt['lr'], betas=(0.9, 0.999), eps=1e-8)
 
+scheduler = lr_scheduler.StepLR(optimizer, step_size=opt['lr_step'], gamma=0.5)
+# scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.9)
+# mode为min，则loss不下降学习率乘以factor，max则反之
+
 if opt['pre_trained'] and os.path.exists(opt['pre_train_path']):
     model.load_state_dict(torch.load(opt['pre_train_path'], map_location=lambda storage, loc: storage))
     print('Pre-trained SR model is loaded.')
 
 
 def train(e):
+    scheduler.step(e)
     epoch_loss = 0
     model.train()
     for batch_i, batch in enumerate(data_loader):
@@ -92,7 +93,11 @@ def train(e):
             with SummaryWriter(log_dir=tb_dir, comment='WDSR')as w:
                 w.add_scalar('Train/Loss', loss.item(), niter)
 
-    print(f"===> Epoch {e} Complete: Avg. Loss: {epoch_loss / len(data_loader):.4f}")
+    avg_loss = epoch_loss / len(data_loader)
+    with SummaryWriter(log_dir=tb_dir, comment='WDSR')as w:
+        w.add_scalar('Train/lr', optimizer.param_groups[0]['lr'], e)
+        w.add_scalar('Train/epoch_Loss', avg_loss, e)
+    print(f"===> Epoch {e} Complete: Avg. Loss: {avg_loss:.4f}")
     return
 
 
@@ -115,8 +120,8 @@ def eval_func(only=False):
         epoch_loss += loss.item()
         avg_psnr += _psnr
 
-        print(f"===> eval({batch_i}/{len(eval_loader)}):  PSNR: {_psnr:.4f}",
-              f" Loss: {loss.item():.4f} || Timer: {(t1 - t0):.4f} sec.")
+        # print(f"===> eval({batch_i}/{len(eval_loader)}):  PSNR: {_psnr:.4f}",
+        #       f" Loss: {loss.item():.4f} || Timer: {(t1 - t0):.4f} sec.")
 
     avg_psnr /= len(eval_loader)
     print(f"===> eval Complete: Avg PSNR: {avg_psnr}",
@@ -140,6 +145,7 @@ def checkpoint(comment=""):
     torch.save(model.state_dict(), save_path)
     opt['pre_train_path'] = save_path
     opt['pre_trained'] = True
+    opt['startEpoch'] = epoch + 1
     with open(args.yaml_path, 'w') as f:
         f.write(yaml.dump(opt))
     print(f"Checkpoint saved to {save_path}")
@@ -152,12 +158,6 @@ if doEval:
 else:
     for epoch in range(opt['startEpoch'], opt['nEpochs'] + 1):
         train(epoch)
-        # todo learning rate is decayed by a factor of 10 every half of total epochs
-        if (epoch + 1) % (opt['nEpochs'] / 2) == 0:
-            for param_group in optimizer.param_groups:
-                param_group['lr'] /= 10.0
-            print(f"Learning rate decay: lr={optimizer.param_groups[0]['lr']}")
-
         if (epoch + 1) % opt['snapshots'] == 0:
             checkpoint(label)
             eval_func()

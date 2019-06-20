@@ -8,6 +8,7 @@ result_dir: /data/result/
 hardware: {cuda: true, n_GPUs: 1, seed: 123, threads: 0}
 log_dir: /output
 lr: 0.001
+lr_step: 30
 model: WDSR
 nEpochs: 150
 only_eval: false
