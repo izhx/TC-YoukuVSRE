@@ -188,6 +188,72 @@ class SISRDataset(data.Dataset):
         return data.dataset.ConcatDataset([self, other])
 
 
+class ESRGANDataset(data.Dataset):
+    def __init__(self, opt, preload=False):
+        super(ESRGANDataset, self).__init__()
+        data_dir = opt['data_dir']
+        self.scale = opt['scale']
+        self.augmentation = opt['augmentation']
+        self.patch_size = opt['patch_size']
+        self.data_dir = opt['data_dir']
+        self.preload = preload
+        v_freq = opt['v_freq'] if opt['v_freq'] else 10
+        self.paths = [v for v in glob.glob(f"{data_dir}/*_l")]
+        self.data = list()
+        if preload:
+            for vd in self.paths:
+                frame_paths = sorted(glob.glob(f"{vd}/*.npy"))
+                for lrp in frame_paths:
+                    lr = np.load(lrp)
+                    gt = np.load(lrp.replace('_l', '_h_GT'))
+                    vid = os.path.basename(lrp)[:11]
+                    self.data.append((vid, lr, gt))
+            random.shuffle(self.data)
+        else:
+            self.paths = self.paths * v_freq
+            random.shuffle(self.paths)
+        return
+
+    def __getitem__(self, index):
+        if self.preload:
+            imgs = [self.data[index][1].astype(np.float32)]
+            hr = self.data[index][2].astype(np.float32)
+            lr_path, gt_path = ' ', ' '
+        else:
+            frame_paths = sorted(glob.glob(f"{self.paths[index]}/*.npy"))
+            # 随机抽帧
+            lr_id = random.randint(0, len(frame_paths) - 1)
+            # 取数据
+            lr_path = frame_paths[lr_id]
+            gt_path = f"{lr_path}".replace('_l', '_h_GT')  # 取GT
+            imgs = [np.load(lr_path).astype(np.float32)]
+            hr = np.load(gt_path).astype(np.float32)
+
+        if self.augmentation:
+            imgs, hr, _ = augment(imgs, hr)
+
+        if self.patch_size != 0:
+            imgs, hr = get_patch(imgs, hr, self.patch_size)
+
+        lr = imgs[0]
+        # to tensor
+        lr = torch.from_numpy(np.ascontiguousarray(lr.transpose((2, 0, 1)))).float()
+        gt = torch.from_numpy(np.ascontiguousarray(hr.transpose((2, 0, 1)))).float()
+        return {'LQ': lr, 'GT': gt, 'LQ_path': lr_path, 'GT_path': gt_path}
+
+    @staticmethod
+    def collate_fn(batch):
+        lr, gt = list(zip(*batch))
+        return torch.stack(lr), torch.stack(gt)
+
+    def __len__(self):
+        if self.preload:
+            return len(self.data)
+        return len(self.paths)
+
+    def __add__(self, other):
+        return data.dataset.ConcatDataset([self, other])
+
 class Error(Exception):
     pass
 

@@ -3,6 +3,8 @@ import glob
 import numpy as np
 from data.info_list import CARTOONS
 
+from data.youku import SISRDataset
+
 
 def main(dir):
     video_paths = glob.glob(f"{dir}/*h_GT")
@@ -25,7 +27,18 @@ def main(dir):
 
 if __name__ == '__main__':
     DIR = r"D:/DATA/train"
-    # yk = YoukuDataset(DIR, 4, 7, False, 64, "new_info", v_freq=5, cut=True)
+
+    # ds = glob.glob(f"{DIR}/*_l")
+    # for dp in ds:
+    #     fpl = glob.glob(f'{dp}/*.npy')
+    #     for i, fp in enumerate(fpl):
+    #         if i % 10 != 0:
+    #             os.remove(fp)
+    #             os.remove(fp.replace('_l', '_h_GT'))
+    #         else:
+    #             print(fp)
+
+    yk = SISRDataset(DIR, augment=True, patch_size=128, v_freq=5, preload=True)
     # yk.__getitem__(0)
     # test()
     main(DIR)

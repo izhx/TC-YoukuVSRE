@@ -1,218 +1,120 @@
-import os
+import os.path as osp
+import logging
 import time
-import glob
 import argparse
-import numpy as np
-import torch
-import torch.backends.cudnn as cudnn
-import cv2
+from collections import OrderedDict
 
-from model.EDVR_arch import EDVR
-from utils.y4m_tools import read_y4m, save_y4m
-from data.info_list import SCENE
+import options.options as option
+import utils.util as util
+from data.util import bgr2ycbcr
+from data import create_dataset, create_dataloader
+from models import create_model
 
-parser = argparse.ArgumentParser(description='PyTorch Super Res Example')
-parser.add_argument('--upscale_factor', type=int, default=4, help="super resolution upscale factor")
-parser.add_argument('--batchSize', type=int, default=8, help='training batch size')
-parser.add_argument('--gpu_mode', type=bool, default=True)
-parser.add_argument('--threads', type=int, default=0, help='number of threads for data loader to use')
-parser.add_argument('--seed', type=int, default=123, help='random seed to use. Default=123')
-parser.add_argument('--gpus', default=1, type=int, help='number of gpu')
-parser.add_argument('--data_dir', type=str, default='./dataset/train', help="测试集路径")
-parser.add_argument('--nFrames', type=int, default=7)
-parser.add_argument('--patch_size', type=int, default=0, help='0 to use original frame size')
-parser.add_argument('--data_augmentation', type=bool, default=False)
-parser.add_argument('--padding', type=str, default="reflection",
-                    help="padding: replicate | reflection | new_info | circle")
-parser.add_argument('--model_type', type=str, default='EDVR')
-parser.add_argument('--pretrained_sr', default='./weights/4x_EDVRyk_epoch_139.pth', help='sr pretrained base model')
-parser.add_argument('--pretrained', type=bool, default=True)
-parser.add_argument('--result_dir', default='./result', help='Location to save result.')
+#### options
+parser = argparse.ArgumentParser()
+parser.add_argument('-opt', type=str, required=True, help='Path to options YMAL file.')
+opt = option.parse(parser.parse_args().opt, is_train=False)
+opt = option.dict_to_nonedict(opt)
 
-opt = parser.parse_args()
-gpus_list = range(opt.gpus)
-cudnn.benchmark = True
+util.mkdirs(
+    (path for key, path in opt['path'].items()
+     if not key == 'experiments_root' and 'pretrain_model' not in key and 'resume' not in key))
+util.setup_logger('base', opt['path']['log'], 'test_' + opt['name'], level=logging.INFO,
+                  screen=True, tofile=True)
+logger = logging.getLogger('base')
+logger.info(option.dict2str(opt))
 
-cuda = opt.gpu_mode
-if cuda and not torch.cuda.is_available():
-    raise Exception("No GPU found, please run without --cuda")
+#### Create test dataset and dataloader
+test_loaders = []
+for phase, dataset_opt in sorted(opt['datasets'].items()):
+    test_set = create_dataset(dataset_opt)
+    test_loader = create_dataloader(test_set, dataset_opt)
+    logger.info('Number of test images in [{:s}]: {:d}'.format(dataset_opt['name'], len(test_set)))
+    test_loaders.append(test_loader)
 
-torch.manual_seed(opt.seed)
-if cuda:
-    torch.cuda.manual_seed(opt.seed)
-device = torch.device('cuda')
+model = create_model(opt)
+for test_loader in test_loaders:
+    test_set_name = test_loader.dataset.opt['name']
+    logger.info('\nTesting [{:s}]...'.format(test_set_name))
+    test_start_time = time.time()
+    dataset_dir = osp.join(opt['path']['results_root'], test_set_name)
+    util.mkdir(dataset_dir)
 
-print(opt)
+    test_results = OrderedDict()
+    test_results['psnr'] = []
+    test_results['ssim'] = []
+    test_results['psnr_y'] = []
+    test_results['ssim_y'] = []
 
-print('===> Building model ', opt.model_type)
-if opt.model_type == 'EDVR':
-    model = EDVR(64, opt.nFrames, groups=8, front_RBs=5, back_RBs=40)  # TODO edvr参数
-else:
-    model = None
+    for data in test_loader:
+        need_GT = False if test_loader.dataset.opt['dataroot_GT'] is None else True
+        model.feed_data(data, need_GT=need_GT)
+        img_path = data['GT_path'][0] if need_GT else data['LQ_path'][0]
+        img_name = osp.splitext(osp.basename(img_path))[0]
 
-if cuda:
-    model = torch.nn.DataParallel(model, device_ids=gpus_list)
+        model.test()
+        visuals = model.get_current_visuals(need_GT=need_GT)
 
-if opt.pretrained:
-    model_name = os.path.join(opt.pretrained_sr)
-    if os.path.exists(model_name):
-        model.load_state_dict(torch.load(model_name, map_location=lambda storage, loc: storage))
-        print('Pre-trained SR model is loaded.')
+        sr_img = util.tensor2img(visuals['SR'])  # uint8
 
-if cuda:
-    model = model.cuda(gpus_list[0])
-else:
-    # # original saved file with DataParallel
-    # state_dict = torch.load(opt.model, map_location=lambda storage, loc: storage)
-    # # create new OrderedDict that does not contain `module.`
-    # new_state_dict = OrderedDict()
-    # for k, v in state_dict.items():
-    #     name = k[7:]  # remove `module.`
-    #     new_state_dict[name] = v
-    # # load params
-    # model.load_state_dict(new_state_dict)
-    pass
-
-
-def save_img(yuv, name):
-    yuv = np.transpose(yuv, (1, 2, 0))
-    yuv = (yuv * 255.0).round().astype(np.uint8)
-    img = cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR)
-    cv2.imwrite(f'./result/{name}.png', img)
-    return
-
-
-def single_forward(model, imgs_in):
-    with torch.no_grad():
-        model_output = model(imgs_in)
-        if isinstance(model_output, list) or isinstance(model_output, tuple):
-            output = model_output[0]
+        # save images
+        suffix = opt['suffix']
+        if suffix:
+            save_img_path = osp.join(dataset_dir, img_name + suffix + '.png')
         else:
-            output = model_output
-    return output
+            save_img_path = osp.join(dataset_dir, img_name + '.png')
+        util.save_img(sr_img, save_img_path)
 
+        # calculate PSNR and SSIM
+        if need_GT:
+            gt_img = util.tensor2img(visuals['GT'])
+            gt_img = gt_img / 255.
+            sr_img = sr_img / 255.
 
-def index_generation(crt_i, max_n, N, padding='reflection'):
-    """
-    padding: replicate | reflection | new_info | circle
-    """
-    if max_n < N:
-        padding = 'replicate'
-
-    max_n = max_n - 1
-    n_pad = N // 2
-    return_l = []
-
-    for i in range(crt_i - n_pad, crt_i + n_pad + 1):
-        if i < 0:
-            if padding == 'replicate':
-                add_idx = 0
-            elif padding == 'reflection':
-                add_idx = -i
-            elif padding == 'new_info':
-                add_idx = (crt_i + n_pad) + (-i)
-            elif padding == 'circle':
-                add_idx = N + i
+            crop_border = opt['crop_border'] if opt['crop_border'] else opt['scale']
+            if crop_border == 0:
+                cropped_sr_img = sr_img
+                cropped_gt_img = gt_img
             else:
-                raise ValueError('Wrong padding mode')
-        elif i > max_n:
-            if padding == 'replicate':
-                add_idx = max_n
-            elif padding == 'reflection':
-                add_idx = max_n * 2 - i
-            elif padding == 'new_info':
-                add_idx = (crt_i - n_pad) - (i - max_n)
-            elif padding == 'circle':
-                add_idx = i - N
+                cropped_sr_img = sr_img[crop_border:-crop_border, crop_border:-crop_border, :]
+                cropped_gt_img = gt_img[crop_border:-crop_border, crop_border:-crop_border, :]
+
+            psnr = util.calculate_psnr(cropped_sr_img * 255, cropped_gt_img * 255)
+            ssim = util.calculate_ssim(cropped_sr_img * 255, cropped_gt_img * 255)
+            test_results['psnr'].append(psnr)
+            test_results['ssim'].append(ssim)
+
+            if gt_img.shape[2] == 3:  # RGB image
+                sr_img_y = bgr2ycbcr(sr_img, only_y=True)
+                gt_img_y = bgr2ycbcr(gt_img, only_y=True)
+                if crop_border == 0:
+                    cropped_sr_img_y = sr_img_y
+                    cropped_gt_img_y = gt_img_y
+                else:
+                    cropped_sr_img_y = sr_img_y[crop_border:-crop_border, crop_border:-crop_border]
+                    cropped_gt_img_y = gt_img_y[crop_border:-crop_border, crop_border:-crop_border]
+                psnr_y = util.calculate_psnr(cropped_sr_img_y * 255, cropped_gt_img_y * 255)
+                ssim_y = util.calculate_ssim(cropped_sr_img_y * 255, cropped_gt_img_y * 255)
+                test_results['psnr_y'].append(psnr_y)
+                test_results['ssim_y'].append(ssim_y)
+                logger.info(
+                    '{:20s} - PSNR: {:.6f} dB; SSIM: {:.6f}; PSNR_Y: {:.6f} dB; SSIM_Y: {:.6f}.'.
+                    format(img_name, psnr, ssim, psnr_y, ssim_y))
             else:
-                raise ValueError('Wrong padding mode')
+                logger.info('{:20s} - PSNR: {:.6f} dB; SSIM: {:.6f}.'.format(img_name, psnr, ssim))
         else:
-            add_idx = i
-        return_l.append(add_idx)
-    return return_l
+            logger.info(img_name)
 
-
-avgpool = torch.nn.AvgPool2d((2, 2), stride=(2, 2))
-
-
-def single_test(video_path):
-    fac = opt.upscale_factor
-    print(f'Processing: {video_path}')
-    t0 = time.time()
-    frames, header = read_y4m(video_path)
-    header = header.split()
-    vid = os.path.basename(video_path)[:-6]
-    # 转场切分
-    scl = SCENE[vid]
-    scenes = list()
-    for i in range(1, len(scl)):
-        scenes.append(frames[scl[i - 1]:scl[i], :, :, :])
-    else:
-        scenes.append(frames[scl[-1]:, :, :, :])
-
-    size = np.array(frames[0].shape[:2])
-    pad_size = (np.ceil(size / 4) * 4 - size).astype(np.int)
-    hr_size, hr_pad = size * fac, pad_size * fac
-
-    def convert_channel(ch: torch.tensor):
-        ch = ch.numpy().flatten()
-        ch = (ch * 255).round().astype(np.uint8)
-        # Important. Unlike MATLAB, numpy.unit8() WILL NOT round by default.
-        return ch
-
-    hr_frames = list()
-    for frames in scenes:
-        # 归一化
-        frames = frames.astype(np.float32)
-        for i in range(len(frames)):
-            img = frames[i]
-            _min, _max = img.min(), img.max()
-            frames[i] = (img - _min) / (_max - _min)
-        # 预处理
-        frames = np.stack(frames, axis=0)
-        frames = np.pad(frames, ((0, 0), (pad_size[0], pad_size[1]), (0, 0), (0, 0)), 'constant',
-                        constant_values=(0, 0))
-        imgs = torch.from_numpy(np.ascontiguousarray(frames.transpose((0, 3, 1, 2)))).float()
-        lfs = len(frames)
-        # 单帧超分
-        for i in range(lfs):
-            select_idx = index_generation(i, lfs, opt.nFrames, padding=opt.padding)
-            imgs_in = imgs.index_select(0, torch.LongTensor(select_idx)).unsqueeze(0).to(device)
-            output = single_forward(model, imgs_in)
-            output_f = output.data.float().cpu().squeeze(0)
-            output_f = output_f[:, hr_pad[0]:, hr_pad[1]:]
-            prediction_pool = avgpool(output_f)
-            # 给出像素
-            y = convert_channel(output_f[0, :, :])
-            u = convert_channel(prediction_pool[1, :, :])
-            v = convert_channel(prediction_pool[2, :, :])
-            hr_frames.append(np.concatenate((y, u, v)))
-
-    header[1] = b'W' + str(hr_size[1]).encode()
-    header[2] = b'H' + str(hr_size[0]).encode()
-    save_path = f'{opt.result_dir}/{os.path.basename(video_path).replace("_l", "_h_Res")}'
-    header = b' '.join(header) + b'\n'
-
-    # 后9/10抽帧存储
-    if int(vid[6:]) > 204:
-        thin_frames = list()
-        for i, f in enumerate(hr_frames):
-            if i % 25 == 0:
-                thin_frames.append(f)
-        save_y4m(thin_frames, header, save_path.replace('_h', '_h_Sub25'))
-    else:  # 存完整的
-        save_y4m(hr_frames, header, save_path)
-    t1 = time.time()
-    print(f'One video saved: {save_path}, timer: {(t1 - t0):.4f} sec.')
-    return
-
-
-def test():
-    test_paths = glob.glob(f"{opt.data_dir}/*_l.y4m")
-    for vp in test_paths:
-        single_test(vp)
-    return
-
-
-if __name__ == '__main__':
-    test()
+    if need_GT:  # metrics
+        # Average PSNR/SSIM results
+        ave_psnr = sum(test_results['psnr']) / len(test_results['psnr'])
+        ave_ssim = sum(test_results['ssim']) / len(test_results['ssim'])
+        logger.info(
+            '----Average PSNR/SSIM results for {}----\n\tPSNR: {:.6f} dB; SSIM: {:.6f}\n'.format(
+                test_set_name, ave_psnr, ave_ssim))
+        if test_results['psnr_y'] and test_results['ssim_y']:
+            ave_psnr_y = sum(test_results['psnr_y']) / len(test_results['psnr_y'])
+            ave_ssim_y = sum(test_results['ssim_y']) / len(test_results['ssim_y'])
+            logger.info(
+                '----Y channel, average PSNR/SSIM----\n\tPSNR_Y: {:.6f} dB; SSIM_Y: {:.6f}\n'.
+                format(ave_psnr_y, ave_ssim_y))

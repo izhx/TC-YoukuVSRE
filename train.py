@@ -1,194 +1,231 @@
 import os
-import time
+import math
 import argparse
+import random
+import logging
+
 import torch
-import torch.nn as nn
-import torch.optim as optim
-import torch.backends.cudnn as cudnn
-from torch.autograd import Variable
-from torch.utils.data import DataLoader
+import torch.distributed as dist
+import torch.multiprocessing as mp
+from data.data_sampler import DistIterSampler
 
-from model.EDVR_arch import EDVR, CharbonnierLoss
-from data.youku import YoukuDataset
-from utils.util import calculate_psnr
-
-parser = argparse.ArgumentParser(description='PyTorch Super Res Example')
-parser.add_argument('--upscale_factor', type=int, default=4, help="super resolution upscale factor")
-parser.add_argument('--batchSize', type=int, default=4, help='training batch size')
-parser.add_argument("--gradient_accumulations", type=int, default=2, help="number of gradient accumulation before step")
-parser.add_argument('--start_epoch', type=int, default=1, help='Starting epoch for continuing training')
-parser.add_argument('--nEpochs', type=int, default=150, help='number of epochs to train for')
-parser.add_argument('--snapshots', type=int, default=5, help='Snapshots')
-parser.add_argument('--lr', type=float, default=4e-4, help='Learning Rate. Default=0.0004')
-parser.add_argument('--patch_size', type=int, default=64, help='0 to use original frame size')
-parser.add_argument('--v_freq', type=int, default=15, help='每个视频每代出现次数')
-parser.add_argument('--gpu_mode', type=bool, default=True)
-parser.add_argument('--threads', type=int, default=0, help='number of threads for data loader to use')
-parser.add_argument('--seed', type=int, default=123, help='random seed to use. Default=123')
-parser.add_argument('--gpus', default=1, type=int, help='number of gpu')
-parser.add_argument('--data_dir', type=str, default='/input/train')
-parser.add_argument('--eval_dir', type=str, default='./dataset/eval', help="验证集文件夹")
-# parser.add_argument('--other_dataset', type=bool, default=False, help="use other dataset than vimeo-90k")
-parser.add_argument('--nFrames', type=int, default=7)
-parser.add_argument('--data_augmentation', type=bool, default=False)
-parser.add_argument('--padding', type=str, default="reflection",
-                    help="padding: replicate | reflection | new_info | circle")
-parser.add_argument('--model_type', type=str, default='EDVR')
-# parser.add_argument('--residual', type=bool, default=False)
-parser.add_argument('--pretrained_sr', default='weights/3x_edvr_epoch_84.pth', help='sr pretrained base model')
-parser.add_argument('--pretrained', type=bool, default=False)
-parser.add_argument('--save_folder', default='./weights/', help='Location to save checkpoint models')
-
-opt = parser.parse_args()
-gpus_list = range(opt.gpus)
-cudnn.benchmark = True
-
-cuda = opt.gpu_mode
-if cuda and not torch.cuda.is_available():
-    raise Exception("No GPU found, please run without --cuda")
-
-torch.manual_seed(opt.seed)
-if cuda:
-    torch.cuda.manual_seed(opt.seed)
-
-print(opt)
-
-avgpool = torch.nn.AvgPool2d((2, 2), stride=(2, 2))
+from options import options as option
+from utils import util
+from data import create_dataloader, create_dataset
+from models import create_model
 
 
-def train(e):
-    epoch_loss = 0
-    model.train()
-    for batch_i, (lr_seq, gt) in enumerate(data_loader):
-        batches_done = len(data_loader) * e + batch_i
-        if cuda:
-            lr_seq = Variable(lr_seq, requires_grad=True).cuda(gpus_list[0])
-            gt = Variable(gt, requires_grad=True).cuda(gpus_list[0])
-
-        optimizer.zero_grad()
-        t0 = time.time()
-        prediction = model(lr_seq)
-        loss = criterion(prediction, gt)
-        t1 = time.time()
-
-        epoch_loss += loss.item()
-
-        loss.backward()
-        optimizer.step()
-
-        if batches_done % opt.gradient_accumulations:
-            # Accumulates gradient before each step
-            # optimizer.step()
-            # optimizer.zero_grad()
-            pass
-
-        print(f"===> Epoch[{e}]({batch_i}/{len(data_loader)}):",
-              f" Loss: {loss.item():.4f} || Timer: {(t1 - t0):.4f} sec.")
-
-    print(f"===> Epoch {e} Complete: Avg. Loss: {epoch_loss / len(data_loader):.4f}")
+def init_dist(backend='nccl', **kwargs):
+    ''' initialization for distributed training'''
+    # if mp.get_start_method(allow_none=True) is None:
+    if mp.get_start_method(allow_none=True) != 'spawn':
+        mp.set_start_method('spawn')
+    rank = int(os.environ['RANK'])
+    num_gpus = torch.cuda.device_count()
+    torch.cuda.set_device(rank % num_gpus)
+    dist.init_process_group(backend=backend, **kwargs)
 
 
-def eval_func():
-    epoch_loss = 0
-    t_psnr = 0
-    model.load_state_dict(torch.load(opt.save_folder + '4x_EDVRyk_epoch_54.pth'))
-    model.eval()
-    for batch_i, (lr_seq, gt) in enumerate(data_loader):
-        if cuda:
-            lr_seq = Variable(lr_seq, requires_grad=False).cuda(gpus_list[0])
-            gt = Variable(gt, requires_grad=False).cuda(gpus_list[0])
+def main():
+    #### options
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-opt', type=str, default="./train_youku.yml", help='Path to option YMAL file.')
+    parser.add_argument('--launcher', choices=['none', 'pytorch'], default='none', help='job launcher')
+    parser.add_argument('--local_rank', type=int, default=0)
+    args = parser.parse_args()
+    opt = option.parse(args.opt, is_train=True)
 
-        optimizer.zero_grad()
-        t0 = time.time()
-        with torch.no_grad():
-            prediction = model(lr_seq)
+    #### distributed training settings
+    if args.launcher == 'none':  # disabled distributed training
+        opt['dist'] = False
+        rank = -1
+        print('Disabled distributed training.')
+    else:
+        opt['dist'] = True
+        init_dist()
+        world_size = torch.distributed.get_world_size()
+        rank = torch.distributed.get_rank()
 
-        loss = criterion(prediction, gt)
-        t1 = time.time()
-        epoch_loss += loss.item()
+    #### loading resume state if exists
+    if opt['path'].get('resume_state', None):
+        # distributed resuming: all load into default GPU
+        device_id = torch.cuda.current_device()
+        resume_state = torch.load(opt['path']['resume_state'],
+                                  map_location=lambda storage, loc: storage.cuda(device_id))
+        option.check_resume(opt, resume_state['iter'])  # check resume options
+    else:
+        resume_state = None
 
-        y_lr, y_gt = prediction[:, 0, :, :], gt[:, 0, :, :]
-        y_lr, y_gt = y_lr.cpu().numpy() * 255, y_gt.cpu().numpy() * 255
-        # 只计算Y通道PSNR
-        avg_psnr = calculate_psnr(y_lr, y_gt)
-        t_psnr += avg_psnr
+    #### mkdir and loggers
+    if rank <= 0:  # normal training (rank -1) OR distributed training (rank 0)
+        if resume_state is None:
+            util.mkdir_and_rename(
+                opt['path']['experiments_root'])  # rename experiment folder if exists
+            util.mkdirs((path for key, path in opt['path'].items() if not key == 'experiments_root'
+                         and 'pretrain_model' not in key and 'resume' not in key))
 
-        print(f"===> eval({batch_i}/{len(data_loader)}):  PSNR: {avg_psnr:.4f}",
-              f" Loss: {loss.item():.4f} || Timer: {(t1 - t0):.4f} sec.")
+        # config loggers. Before it, the log will not work
+        util.setup_logger('base', opt['path']['log'], 'train_' + opt['name'], level=logging.INFO,
+                          screen=True, tofile=True)
+        util.setup_logger('val', opt['path']['log'], 'val_' + opt['name'], level=logging.INFO,
+                          screen=True, tofile=True)
+        logger = logging.getLogger('base')
+        logger.info(option.dict2str(opt))
+        # tensorboard logger
+        if opt['use_tb_logger'] and 'debug' not in opt['name']:
+            version = float(torch.__version__[0:3])
+            if version >= 1.1:  # PyTorch 1.1
+                from torch.utils.tensorboard import SummaryWriter
+            else:
+                logger.info(
+                    'You are using PyTorch {}. Tensorboard will use [tensorboardX]'.format(version))
+                from tensorboardX import SummaryWriter
+            tb_logger = SummaryWriter(log_dir=opt['tb_log_dir'] + opt['name'])
+    else:
+        util.setup_logger('base', opt['path']['log'], 'train', level=logging.INFO, screen=True)
+        logger = logging.getLogger('base')
 
-    t_psnr /= len(data_loader)
-    print(f"===> eval Complete: Avg PSNR: {t_psnr}",
-          f", Avg. Loss: {epoch_loss / len(data_loader):.4f}")
-    return t_psnr
+    # convert to NoneDict, which returns None for missing keys
+    opt = option.dict_to_nonedict(opt)
+
+    #### random seed
+    seed = opt['train']['manual_seed']
+    if seed is None:
+        seed = random.randint(1, 10000)
+    if rank <= 0:
+        logger.info('Random seed: {}'.format(seed))
+    util.set_random_seed(seed)
+
+    torch.backends.cudnn.benckmark = True
+    # torch.backends.cudnn.deterministic = True
+
+    #### create train and val dataloader
+    dataset_ratio = 200  # enlarge the size of each epoch
+    for phase, dataset_opt in opt['datasets'].items():
+        if phase == 'train':
+            train_set = create_dataset(dataset_opt)
+            train_size = int(math.ceil(len(train_set) / dataset_opt['batch_size']))
+            total_iters = int(opt['train']['niter'])
+            total_epochs = int(math.ceil(total_iters / train_size))
+            if opt['dist']:
+                train_sampler = DistIterSampler(train_set, world_size, rank, dataset_ratio)
+                total_epochs = int(math.ceil(total_iters / (train_size * dataset_ratio)))
+            else:
+                train_sampler = None
+            train_loader = create_dataloader(train_set, dataset_opt, opt, train_sampler)
+            if rank <= 0:
+                logger.info('Number of train images: {:,d}, iters: {:,d}'.format(
+                    len(train_set), train_size))
+                logger.info('Total epochs needed: {:d} for iters {:,d}'.format(
+                    total_epochs, total_iters))
+        elif phase == 'val':
+            val_set = create_dataset(dataset_opt)
+            val_loader = create_dataloader(val_set, dataset_opt, opt, None)
+            if rank <= 0:
+                logger.info('Number of val images in [{:s}]: {:d}'.format(
+                    dataset_opt['name'], len(val_set)))
+        else:
+            raise NotImplementedError('Phase [{:s}] is not recognized.'.format(phase))
+    assert train_loader is not None
+
+    #### create model
+    model = create_model(opt)
+
+    #### resume training
+    if resume_state:
+        logger.info('Resuming training from epoch: {}, iter: {}.'.format(
+            resume_state['epoch'], resume_state['iter']))
+
+        start_epoch = resume_state['epoch']
+        current_step = resume_state['iter']
+        model.resume_training(resume_state)  # handle optimizers and schedulers
+    else:
+        current_step = 0
+        start_epoch = 0
+
+    #### training
+    logger.info('Start training from epoch: {:d}, iter: {:d}'.format(start_epoch, current_step))
+    for epoch in range(start_epoch, total_epochs + 1):
+        if opt['dist']:
+            train_sampler.set_epoch(epoch)
+        for _, train_data in enumerate(train_loader):
+            current_step += 1
+            if current_step > total_iters:
+                break
+            #### update learning rate
+            model.update_learning_rate(current_step, warmup_iter=opt['train']['warmup_iter'])
+
+            #### training
+            model.feed_data(train_data)
+            model.optimize_parameters(current_step)
+
+            #### log
+            if current_step % opt['logger']['print_freq'] == 0:
+                logs = model.get_current_log()
+                message = '<epoch:{:3d}, iter:{:8,d}, lr:{:.3e}> '.format(
+                    epoch, current_step, model.get_current_learning_rate())
+                for k, v in logs.items():
+                    message += '{:s}: {:.4e} '.format(k, v)
+                    # tensorboard logger
+                    if opt['use_tb_logger'] and 'debug' not in opt['name']:
+                        if rank <= 0:
+                            tb_logger.add_scalar(k, v, current_step)
+                if rank <= 0:
+                    logger.info(message)
+
+            # validation
+            if current_step % opt['train']['val_freq'] == 0 and rank <= 0:
+                avg_psnr = 0.0
+                idx = 0
+                for val_data in val_loader:
+                    idx += 1
+                    img_name = os.path.splitext(os.path.basename(val_data['LQ_path'][0]))[0]
+                    img_dir = os.path.join(opt['path']['val_images'], img_name)
+                    util.mkdir(img_dir)
+
+                    model.feed_data(val_data)
+                    model.test()
+
+                    visuals = model.get_current_visuals()
+                    sr_img = util.tensor2img(visuals['SR'])  # uint8
+                    gt_img = util.tensor2img(visuals['GT'])  # uint8
+
+                    # Save SR images for reference
+                    save_img_path = os.path.join(img_dir,
+                                                 '{:s}_{:d}.png'.format(img_name, current_step))
+                    util.save_img(sr_img, save_img_path)
+
+                    # calculate PSNR
+                    crop_size = opt['scale']
+                    gt_img = gt_img / 255.
+                    sr_img = sr_img / 255.
+                    cropped_sr_img = sr_img[crop_size:-crop_size, crop_size:-crop_size, :]
+                    cropped_gt_img = gt_img[crop_size:-crop_size, crop_size:-crop_size, :]
+                    avg_psnr += util.calculate_psnr(cropped_sr_img * 255, cropped_gt_img * 255)
+
+                avg_psnr = avg_psnr / idx
+
+                # log
+                logger.info('# Validation # PSNR: {:.4e}'.format(avg_psnr))
+                logger_val = logging.getLogger('val')  # validation logger
+                logger_val.info('<epoch:{:3d}, iter:{:8,d}> psnr: {:.4e}'.format(
+                    epoch, current_step, avg_psnr))
+                # tensorboard logger
+                if opt['use_tb_logger'] and 'debug' not in opt['name']:
+                    tb_logger.add_scalar('psnr', avg_psnr, current_step)
+
+            #### save models and training states
+            if current_step % opt['logger']['save_checkpoint_freq'] == 0:
+                if rank <= 0:
+                    logger.info('Saving models and training states.')
+                    model.save(current_step)
+                    model.save_training_state(epoch, current_step)
+
+    if rank <= 0:
+        logger.info('Saving the final model.')
+        model.save('latest')
+        logger.info('End of training.')
 
 
-def checkpoint(epoch_now):
-    model_out_path = opt.save_folder + str(
-        opt.upscale_factor) + 'x_' + opt.model_type + 'yk' + "_epoch_{}.pth".format(epoch_now)
-    torch.save(model.state_dict(), model_out_path)
-    print("Checkpoint saved to {}".format(model_out_path))
-
-
-print('===> Loading dataset')
-train_set = YoukuDataset(opt.data_dir, opt.upscale_factor, opt.nFrames,
-                         opt.data_augmentation, opt.patch_size, opt.padding, v_freq=opt.v_freq)
-eval_set = YoukuDataset(opt.eval_dir, opt.upscale_factor, opt.nFrames,
-                        opt.data_augmentation, opt.patch_size, opt.padding, v_freq=opt.v_freq)
-data_loader = DataLoader(dataset=train_set, batch_size=opt.batchSize,
-                         shuffle=True, num_workers=opt.threads,
-                         collate_fn=train_set.collate_fn)
-eval_loader = DataLoader(dataset=eval_set, batch_size=opt.batchSize,
-                         shuffle=True, num_workers=opt.threads,
-                         collate_fn=train_set.collate_fn)
-
-print('===> Building model ', opt.model_type)
-if opt.model_type == 'EDVR':
-    model = EDVR(64, opt.nFrames, groups=8, front_RBs=5, back_RBs=40)  # TODO edvr参数
-else:
-    model = None
-
-if cuda:
-    model = torch.nn.DataParallel(model, device_ids=gpus_list)
-
-criterion = CharbonnierLoss()
-
-if opt.pretrained:
-    model_name = os.path.join(opt.save_folder + opt.pretrained_sr)
-    if os.path.exists(model_name):
-        model.load_state_dict(torch.load(model_name, map_location=lambda storage, loc: storage))
-        print('Pre-trained SR model is loaded.')
-
-if cuda:
-    model = model.cuda(gpus_list[0])
-    criterion = criterion.cuda(gpus_list[0])
-
-optimizer = optim.Adam(model.parameters(), lr=opt.lr, betas=(0.9, 0.999), eps=1e-8)
-
-doEval = False
-
-if doEval:
-    eval_func()
-else:
-    for epoch in range(opt.start_epoch, opt.nEpochs + 1):
-        train(epoch)
-        # eval()  # todo 需加入在验证集检验，满足要求停机
-
-        # todo learning rate is decayed by a factor of 10 every half of total epochs
-        if (epoch + 1) % (opt.nEpochs / 2) == 0:
-            for param_group in optimizer.param_groups:
-                param_group['lr'] /= 10.0
-            print(f"Learning rate decay: lr={optimizer.param_groups[0]['lr']}")
-
-        if (epoch + 1) % opt.snapshots == 0:
-            checkpoint(epoch)
-
-"""
-需要调节的：
-- nf 默认64，是卷积的通道
-- padding
-- nFrames
-- lr 的更新
-- batch size
-- patch size
-- v freq  每个视频每epoch抽帧次数
-"""
+if __name__ == '__main__':
+    main()

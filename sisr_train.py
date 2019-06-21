@@ -15,9 +15,8 @@ import torch.backends.cudnn as cudnn
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
-from data.youku import SISRDataset
+from youku import SISRDataset
 from model.WDSR_B import MODEL
-from optim.nadam import Nadam
 
 # Training settings
 parser = argparse.ArgumentParser(description='PyTorch Super Res Example')

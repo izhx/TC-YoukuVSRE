@@ -5,18 +5,18 @@ data_dir: /input/train/
 eval_dir: /input/eval/
 hardware: {cuda: true, n_GPUs: 1, seed: 123, threads: 0}
 log_dir: /output
-lr: 0.0001
-lr_step: 50
+lr: 1.0e-05
+lr_step: 30
 model: WDSR
 nEpochs: 150
 only_eval: false
 patch_size: 128
-pre_train_path: /data/weights//4x_WDSR-R16F128_3.pth
-pre_trained: false
-result_dir: /data/result/
+pre_train_path: /data/weights//4x_WDSR-R16F128_61.pth
+pre_trained: true
+result_dir: /output/result/
 save_dir: /data/weights/
 scale: 4
 snapshots: 1
-startEpoch: 4
+startEpoch: 62
 test_dir: /input/test/
-vFreq: 15
+vFreq: 10

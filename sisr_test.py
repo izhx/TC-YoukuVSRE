@@ -73,7 +73,7 @@ def single_test(video_path):
 
     def convert_channel(ch: torch.tensor):
         ch = ch.numpy().flatten()
-        ch = (ch * 255).round().astype(np.uint8)
+        ch = ch.round().astype(np.uint8)
         # Important. Unlike MATLAB, numpy.unit8() WILL NOT round by default.
         return ch
 
