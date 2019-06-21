@@ -5,19 +5,19 @@ from datetime import datetime
 import math
 import argparse
 import logging
-import shutil
+import pickle
 import yaml
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
-import torch.optim.lr_scheduler as lr_scheduler
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 from data.youku import SISRDataset
 from model.WDSR_B import MODEL
+from optim.nadam import Nadam
 
 # Training settings
 parser = argparse.ArgumentParser(description='PyTorch Super Res Example')
@@ -59,19 +59,19 @@ model = MODEL(cuda, n_res=opt['WDSR']['n_resblocks'], n_feats=opt['WDSR']['n_fea
               res_scale=opt['WDSR']['res_scale']).to(device)
 criterion = nn.L1Loss().to(device)
 
-optimizer = optim.Adam(model.parameters(), lr=opt['lr'], betas=(0.9, 0.999), eps=1e-8)
-
-scheduler = lr_scheduler.StepLR(optimizer, step_size=opt['lr_step'], gamma=0.5)
-# scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.9)
-# mode为min，则loss不下降学习率乘以factor，max则反之
+optimizer = optim.Adam(model.parameters(), lr=opt['lr'])
+# optimizer = Nadam(model.parameters(), lr=0.00001)
+# optimizer = optim.SGD(model.parameters(), lr=opt['lr'], momentum=0.9, weight_decay=1e-4, nesterov=True)
 
 if opt['pre_trained'] and os.path.exists(opt['pre_train_path']):
     model.load_state_dict(torch.load(opt['pre_train_path'], map_location=lambda storage, loc: storage))
+    # with open(f"{opt['save_dir']}/optim.pkl", 'rb') as f:
+    #     optimizer = pickle.load(f)
     print('Pre-trained SR model is loaded.')
 
 
 def train(e):
-    scheduler.step(e)
+    print(f"===> Epoch {e} Begin: LR: {optimizer.param_groups[0]['lr']}")
     epoch_loss = 0
     model.train()
     for batch_i, batch in enumerate(data_loader):
@@ -120,14 +120,16 @@ def eval_func(only=False):
         epoch_loss += loss.item()
         avg_psnr += _psnr
 
-        # print(f"===> eval({batch_i}/{len(eval_loader)}):  PSNR: {_psnr:.4f}",
-        #       f" Loss: {loss.item():.4f} || Timer: {(t1 - t0):.4f} sec.")
+        # if batch_i % 10 == 0:
+        #     print(f"===> eval({batch_i}/{len(eval_loader)}):  PSNR: {_psnr:.4f}",
+        #           f" Loss: {loss.item():.4f} || Timer: {(t1 - t0):.4f} sec.")
 
     avg_psnr /= len(eval_loader)
-    print(f"===> eval Complete: Avg PSNR: {avg_psnr}",
-          f", Avg. Loss: {epoch_loss / len(eval_loader):.4f}")
+    avg_loss = epoch_loss / len(eval_loader)
+    print(f"===> eval Complete: Avg PSNR: {avg_psnr}, Avg. Loss: {avg_loss:.4f}")
     with SummaryWriter(log_dir=tb_dir, comment='WDSR')as w:
         w.add_scalar('eval/PSNR', avg_psnr, epoch)
+        w.add_scalar('eval/LOSS', avg_loss, epoch)
     return avg_psnr
 
 
@@ -146,9 +148,18 @@ def checkpoint(comment=""):
     opt['pre_train_path'] = save_path
     opt['pre_trained'] = True
     opt['startEpoch'] = epoch + 1
+    with open(f"{opt['save_dir']}/optim.pkl", 'wb') as f:
+        pickle.dump(optimizer, f)
     with open(args.yaml_path, 'w') as f:
         f.write(yaml.dump(opt))
     print(f"Checkpoint saved to {save_path}")
+
+
+def adjust_learning_rate(optimizer, epoch):
+    """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
+    lr = args.lr * (0.1 ** (epoch // 30))
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
 
 
 doEval = opt['only_eval']
@@ -161,10 +172,15 @@ else:
         if (epoch + 1) % opt['snapshots'] == 0:
             checkpoint(label)
             eval_func()
+        if (epoch + 1) % opt['lr_step'] == 0:
+            for param_group in optimizer.param_groups:
+                param_group['lr'] /= 10.0
 
 # 脚本退出后存储配置
 with open(args.yaml_path, 'w') as yf:
     yf.write(yaml.dump(opt))
+
+os.system("bash /root/shutdown.sh")
 
 """
 需要调节的：

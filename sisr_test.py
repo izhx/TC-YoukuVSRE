@@ -79,9 +79,10 @@ def single_test(video_path):
 
     hr_frames = list()
     for lr in frames:
+        lr_in = torch.from_numpy(np.ascontiguousarray(lr.transpose((2, 0, 1)))).float().to(device)
         # 单帧超分
         with torch.no_grad():
-            output = model(lr)
+            output = model(lr_in)[0]
         output_f = output.data.float().cpu()
         output_f = output_f[:, hr_pad[0]:, hr_pad[1]:]
         prediction_pool = avgpool(output_f)
