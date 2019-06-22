@@ -281,7 +281,7 @@ class VGGDataset(data.Dataset):
 
     def __getitem__(self, index):
         label = self.data[index][0]
-        img = self.data[index][1].astype(np.float32)
+        img = self.data[index][1]
 
         if self.patch_size != 0:
             (h, w, _) = img.shape

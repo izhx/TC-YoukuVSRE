@@ -30,7 +30,7 @@ class ResBlock(nn.Module):
 
 class MODEL(nn.Module):
     def __init__(self, cuda=True, scale=4, n_res=8, n_feats=64, res_scale=1, n_colors=3,
-                 kernel_size=3, mean=(0.38824835, 0.48927346, 0.50467293)):
+                 kernel_size=3):
         super(MODEL, self).__init__()
         # hyper-params
         act = nn.ReLU(True)
@@ -40,7 +40,14 @@ class MODEL(nn.Module):
         def wn(x):
             return torch.nn.utils.weight_norm(x)
 
-        self.rgb_mean = Variable(torch.FloatTensor(mean)).view([1, 3, 1, 1])
+        if n_colors == 1:
+            mean = [0.38824835]
+        elif n_colors == 2:
+            mean = [0.48927346, 0.50467293]
+        else:
+            mean = [0.38824835, 0.48927346, 0.50467293]
+
+        self.rgb_mean = torch.FloatTensor(mean).view([1, n_colors, 1, 1])
         if cuda:
             self.rgb_mean = self.rgb_mean.cuda()
 

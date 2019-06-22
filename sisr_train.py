@@ -41,12 +41,12 @@ if cuda:
 device = torch.device("cuda" if cuda else "cpu")
 
 now = datetime.now()
-label = f"{opt['model']}-R{opt[opt['model']]['n_resblocks']}F{opt[opt['model']]['n_feats']}"
+label = f"{opt['model']}-C{opt['channel']}-R{opt[opt['model']]['n_resblocks']}F{opt[opt['model']]['n_feats']}"
 tb_dir = f"{opt['log_dir']}/{now.strftime('%m%d-%H%M-')}{label}/"
 
 print('===> Loading dataset')
 train_set = SISRDataset(data_dir=opt['data_dir'], augment=opt['augment'],
-                        patch_size=opt['patch_size'], v_freq=opt['vFreq'], preload=True, norm=True)
+                        patch_size=opt['patch_size'], v_freq=opt['vFreq'], norm=False)
 data_loader = DataLoader(dataset=train_set, num_workers=opt['hardware']['threads'],
                          batch_size=opt['batch_size'], shuffle=True)
 eval_set = SISRDataset(data_dir=opt['eval_dir'], augment=opt['augment'],
@@ -57,7 +57,7 @@ eval_loader = DataLoader(dataset=eval_set, num_workers=opt['hardware']['threads'
 print('===> Building model')
 if opt['model'] == 'WDSR':
     model = MODEL(cuda, n_res=opt['WDSR']['n_resblocks'], n_feats=opt['WDSR']['n_feats'],
-                  res_scale=opt['WDSR']['res_scale']).to(device)
+                  res_scale=opt['WDSR']['res_scale'], n_colors=opt['channel']).to(device)
 elif opt['model'] == 'RRDB':
     model = RRDBNet(3, 3, opt['RRDB']['n_feats'], opt['RRDB']['n_resblocks']).to(device)
 else:
@@ -76,13 +76,23 @@ if opt['pre_trained'] and os.path.exists(opt['pre_train_path']):
     print('Pre-trained SR model is loaded.')
 
 
+def get_ch(img):
+    if opt['channel'] == 1:
+        return img.index_select(1, torch.tensor([0]))
+    elif opt['channel'] == 2:
+        return img.index_select(1, torch.tensor([1, 2]))
+    else:
+        return img
+
+
 def train(e):
     print(f"===> Epoch {e} Begin: LR: {optimizer.param_groups[0]['lr']}")
     epoch_loss = 0
     model.train()
     for batch_i, batch in enumerate(data_loader):
         t0 = time.time()
-        lr, gt = batch[0].to(device), batch[1].to(device)
+        lr, gt = get_ch(batch[0]).to(device), get_ch(batch[1]).to(device)
+        # lr, gt = batch[0].to(device), batch[1].to(device)
 
         optimizer.zero_grad()
         loss = criterion(model(lr), gt)
@@ -115,7 +125,8 @@ def eval_func(only=False):
     model.eval()
     for batch_i, batch in enumerate(eval_loader):
         t0 = time.time()
-        lr, gt = batch[0].to(device), batch[1].to(device)
+        lr, gt = get_ch(batch[0]).to(device), get_ch(batch[1]).to(device)
+        # lr, gt = batch[0].to(device), batch[1].to(device)
 
         with torch.no_grad():
             sr = model(lr)
