@@ -6,6 +6,7 @@ import numpy as np
 import torch
 import torch.utils.data as data
 from .info_list import SCENE
+from .info_list import CARTOONS
 
 
 class YoukuDataset(data.Dataset):
@@ -254,6 +255,62 @@ class ESRGANDataset(data.Dataset):
 
     def __add__(self, other):
         return data.dataset.ConcatDataset([self, other])
+
+
+class VGGDataset(data.Dataset):
+    def __init__(self, data_dir, augment, patch_size):
+        super(VGGDataset, self).__init__()
+        self.augment = augment
+        self.patch_size = patch_size
+        self.data_dir = data_dir
+        self.paths = [v for v in glob.glob(f"{data_dir}/*_l")]
+        self.data = list()
+        for vd in self.paths:
+            frame_paths = sorted(glob.glob(f"{vd}/*.npy"))
+            for lrp in frame_paths:
+                lr = np.load(lrp)
+                vid = os.path.basename(lrp)[:11]
+                if vid in CARTOONS:
+                    kind = 1
+                else:
+                    kind = 0
+                self.data.append((kind, lr))
+        random.shuffle(self.data)
+        return
+
+    def __getitem__(self, index):
+        label = self.data[index][0]
+        img = self.data[index][1].astype(np.float32)
+
+        if self.patch_size != 0:
+            (h, w, _) = img.shape
+            if self.patch_size > w or self.patch_size > h:
+                raise ValueError('图像比patch小')
+            elif self.patch_size % 4 != 0:
+                raise ValueError('patch size 不是4的倍数')
+
+            x = random.randint(0, w - self.patch_size)
+            y = random.randint(0, h - self.patch_size)
+            img = img[y:y + self.patch_size, x:x + self.patch_size, :]
+
+        if self.augment:
+            img = augment2(img)
+
+        # to tensor
+        img = torch.from_numpy(np.ascontiguousarray(img.transpose((2, 0, 1)))).float()
+        return label, img
+
+    @staticmethod
+    def collate_fn(batch):
+        lr, gt = list(zip(*batch))
+        return torch.stack(lr), torch.stack(gt)
+
+    def __len__(self):
+        return len(self.data)
+
+    def __add__(self, other):
+        return data.dataset.ConcatDataset([self, other])
+
 
 class Error(Exception):
     pass

@@ -61,16 +61,18 @@ class Discriminator_VGG_128(nn.Module):
 
 class VGGFeatureExtractor(nn.Module):
     def __init__(self, feature_layer=34, use_bn=False, use_input_norm=True,
-                 device=torch.device('cpu')):
+                 device=torch.device('cpu'), pretrain_path="/data/vgg/19c2e0.pth"):
         super(VGGFeatureExtractor, self).__init__()
         self.use_input_norm = use_input_norm
         if use_bn:
-            model = torchvision.models.vgg19_bn(pretrained=True)
+            model = torchvision.models.vgg19_bn(pretrained=False)
         else:
-            model = torchvision.models.vgg19(pretrained=True)
+            model = torchvision.models.vgg19()
+            model.load_state_dict(torch.load(pretrain_path, map_location=lambda storage, loc: storage))
+
         if self.use_input_norm:
-            mean = torch.Tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1).to(device)
-            # [0.485 - 1, 0.456 - 1, 0.406 - 1] if input in range [-1, 1]
+            mean = torch.Tensor([0.38824835, 0.48927346, 0.50467293]).view(1, 3, 1, 1).to(device)
+            # [0.485 - 1, 0.456 - 1, 0.406 - 1] if input in range [-1, 1]  0.485, 0.456, 0.406
             std = torch.Tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1).to(device)
             # [0.229 * 2, 0.224 * 2, 0.225 * 2] if input in range [-1, 1]
             self.register_buffer('mean', mean)
