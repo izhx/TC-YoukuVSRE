@@ -50,7 +50,7 @@ print('===> Building model')
 models = list()
 for i in range(3):
     models.append(MODEL(cuda, n_res=opt['WDSR']['n_resblocks'], n_feats=opt['WDSR']['n_feats'],
-                        res_scale=opt['WDSR']['res_scale'], n_colors=i).to(device))
+                        res_scale=opt['WDSR']['res_scale'], n_colors=1, mean=opt[f'ch{i}_m']).to(device))
     models[i].load_state_dict(torch.load(opt[f'C{i}_path'], map_location=lambda storage, loc: storage))
 
 criterion = nn.L1Loss().to(device)

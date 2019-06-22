@@ -12,6 +12,10 @@ lr: 1.0e-04
 lr_step: 30
 model: WDSR
 channel: 1
+ch0_m: [0.38824835]
+ch1_m: [0.48927346]
+ch2_m: [0.50467293]
+ch3_m: [0.38824835, 0.48927346, 0.50467293]
 nEpochs: 150
 only_eval: false
 patch_size: 256

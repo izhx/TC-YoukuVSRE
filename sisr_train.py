@@ -57,7 +57,7 @@ eval_loader = DataLoader(dataset=eval_set, num_workers=opt['hardware']['threads'
 print('===> Building model')
 if opt['model'] == 'WDSR':
     model = MODEL(cuda, n_res=opt['WDSR']['n_resblocks'], n_feats=opt['WDSR']['n_feats'],
-                  res_scale=opt['WDSR']['res_scale'], n_colors=opt['channel']).to(device)
+                  res_scale=opt['WDSR']['res_scale'], n_colors=1, mean=opt[f'ch{opt["channel"]}_m']).to(device)
 elif opt['model'] == 'RRDB':
     model = RRDBNet(3, 3, opt['RRDB']['n_feats'], opt['RRDB']['n_resblocks']).to(device)
 else:
