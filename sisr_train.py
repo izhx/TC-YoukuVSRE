@@ -15,8 +15,9 @@ import torch.backends.cudnn as cudnn
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
-from youku import SISRDataset
+from data.youku import SISRDataset
 from model.WDSR_B import MODEL
+from models.modules.RRDBNet_arch import RRDBNet
 
 # Training settings
 parser = argparse.ArgumentParser(description='PyTorch Super Res Example')
@@ -54,8 +55,14 @@ eval_loader = DataLoader(dataset=eval_set, num_workers=opt['hardware']['threads'
                          shuffle=True)
 
 print('===> Building model')
-model = MODEL(cuda, n_res=opt['WDSR']['n_resblocks'], n_feats=opt['WDSR']['n_feats'],
-              res_scale=opt['WDSR']['res_scale']).to(device)
+if opt['model'] == 'WDSR':
+    model = MODEL(cuda, n_res=opt['WDSR']['n_resblocks'], n_feats=opt['WDSR']['n_feats'],
+                  res_scale=opt['WDSR']['res_scale']).to(device)
+elif opt['model'] == 'RRDB':
+    model = RRDBNet(3, 3, opt['RRDB']['n_feats'], opt['RRDB']['n_resblocks']).to(device)
+else:
+    model = None
+
 criterion = nn.L1Loss().to(device)
 
 optimizer = optim.Adam(model.parameters(), lr=opt['lr'])

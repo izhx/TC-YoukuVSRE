@@ -1,13 +1,16 @@
 WDSR: {n_feats: 128, n_resblocks: 16, res_scale: 1.0}
+RRDB:
+  n_feats: 64
+  n_resblocks: 23
 augment: true
 batch_size: 8
 data_dir: /input/train/
 eval_dir: /input/eval/
 hardware: {cuda: true, n_GPUs: 1, seed: 123, threads: 0}
 log_dir: /output
-lr: 1.0e-05
+lr: 1.0e-04
 lr_step: 30
-model: WDSR
+model: RRDB
 nEpochs: 150
 only_eval: false
 patch_size: 128
