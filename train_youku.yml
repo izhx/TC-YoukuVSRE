@@ -5,7 +5,7 @@ tb_log_dir: /output/
 model: srgan
 distortion: sr
 scale: 4
-gpu_ids: [2]
+gpu_ids: [0]
 
 #### datasets
 datasets:
@@ -18,10 +18,11 @@ datasets:
     n_workers: 6  # per GPU
     batch_size: 16
     GT_size: 128
-    patch_size: 128
+    patch_size: 32
+    augmentation: true
     use_flip: true
     use_rot: true
-    color: YUV
+    color: RGB
   val:
     name: val_set14_part
     mode: youku
@@ -41,7 +42,7 @@ network_D:
 
 #### path
 path:
-  pretrain_model_G: /data/pretrained_models/RRDB_PSNR_x4.pth
+#  pretrain_model_G: /data/pretrained_models/RRDB_PSNR_x4.pth
   strict_load: true
   resume_state: ~
 

@@ -191,6 +191,7 @@ class SISRDataset(data.Dataset):
 class ESRGANDataset(data.Dataset):
     def __init__(self, opt, preload=False):
         super(ESRGANDataset, self).__init__()
+        self.opt = opt
         data_dir = opt['data_dir']
         self.scale = opt['scale']
         self.augmentation = opt['augmentation']

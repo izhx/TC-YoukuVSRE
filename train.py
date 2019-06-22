@@ -16,7 +16,7 @@ from models import create_model
 
 
 def init_dist(backend='nccl', **kwargs):
-    ''' initialization for distributed training'''
+    """initialization for distributed training"""
     # if mp.get_start_method(allow_none=True) is None:
     if mp.get_start_method(allow_none=True) != 'spawn':
         mp.set_start_method('spawn')
@@ -27,7 +27,7 @@ def init_dist(backend='nccl', **kwargs):
 
 
 def main():
-    #### options
+    # options
     parser = argparse.ArgumentParser()
     parser.add_argument('-opt', type=str, default="./train_youku.yml", help='Path to option YMAL file.')
     parser.add_argument('--launcher', choices=['none', 'pytorch'], default='none', help='job launcher')
@@ -35,7 +35,7 @@ def main():
     args = parser.parse_args()
     opt = option.parse(args.opt, is_train=True)
 
-    #### distributed training settings
+    # distributed training settings
     if args.launcher == 'none':  # disabled distributed training
         opt['dist'] = False
         rank = -1
@@ -46,7 +46,7 @@ def main():
         world_size = torch.distributed.get_world_size()
         rank = torch.distributed.get_rank()
 
-    #### loading resume state if exists
+    # loading resume state if exists
     if opt['path'].get('resume_state', None):
         # distributed resuming: all load into default GPU
         device_id = torch.cuda.current_device()
@@ -56,7 +56,7 @@ def main():
     else:
         resume_state = None
 
-    #### mkdir and loggers
+    # mkdir and loggers
     if rank <= 0:  # normal training (rank -1) OR distributed training (rank 0)
         if resume_state is None:
             util.mkdir_and_rename(
@@ -88,7 +88,7 @@ def main():
     # convert to NoneDict, which returns None for missing keys
     opt = option.dict_to_nonedict(opt)
 
-    #### random seed
+    # random seed
     seed = opt['train']['manual_seed']
     if seed is None:
         seed = random.randint(1, 10000)
@@ -99,7 +99,7 @@ def main():
     torch.backends.cudnn.benckmark = True
     # torch.backends.cudnn.deterministic = True
 
-    #### create train and val dataloader
+    # create train and val dataloader
     dataset_ratio = 200  # enlarge the size of each epoch
     for phase, dataset_opt in opt['datasets'].items():
         if phase == 'train':
@@ -128,10 +128,10 @@ def main():
             raise NotImplementedError('Phase [{:s}] is not recognized.'.format(phase))
     assert train_loader is not None
 
-    #### create model
+    # create model
     model = create_model(opt)
 
-    #### resume training
+    # resume training
     if resume_state:
         logger.info('Resuming training from epoch: {}, iter: {}.'.format(
             resume_state['epoch'], resume_state['iter']))
@@ -143,7 +143,7 @@ def main():
         current_step = 0
         start_epoch = 0
 
-    #### training
+    # training
     logger.info('Start training from epoch: {:d}, iter: {:d}'.format(start_epoch, current_step))
     for epoch in range(start_epoch, total_epochs + 1):
         if opt['dist']:
@@ -152,14 +152,14 @@ def main():
             current_step += 1
             if current_step > total_iters:
                 break
-            #### update learning rate
+            # update learning rate
             model.update_learning_rate(current_step, warmup_iter=opt['train']['warmup_iter'])
 
-            #### training
+            # training
             model.feed_data(train_data)
             model.optimize_parameters(current_step)
 
-            #### log
+            # log
             if current_step % opt['logger']['print_freq'] == 0:
                 logs = model.get_current_log()
                 message = '<epoch:{:3d}, iter:{:8,d}, lr:{:.3e}> '.format(
@@ -214,7 +214,7 @@ def main():
                 if opt['use_tb_logger'] and 'debug' not in opt['name']:
                     tb_logger.add_scalar('psnr', avg_psnr, current_step)
 
-            #### save models and training states
+            # save models and training states
             if current_step % opt['logger']['save_checkpoint_freq'] == 0:
                 if rank <= 0:
                     logger.info('Saving models and training states.')
