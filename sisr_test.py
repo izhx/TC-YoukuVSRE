@@ -36,19 +36,34 @@ if cuda:
 device = torch.device("cuda" if cuda else "cpu")
 
 print('===> Building model')
-if opt['model'] == 'WDSR':
-    model = MODEL(cuda, n_res=opt['WDSR']['n_resblocks'], n_feats=opt['WDSR']['n_feats'],
-                  res_scale=opt['WDSR']['res_scale']).to(device)
-elif opt['model'] == 'RRDB':
-    model = RRDBNet(3, 3, opt['RRDB']['n_feats'], opt['RRDB']['n_resblocks']).to(device)
-else:
-    model = None
+model = MODEL()
+models = list()
+for c in range(3):
+    models.append(MODEL(cuda, n_res=opt['WDSR']['n_resblocks'], n_feats=opt['WDSR']['n_feats'],
+                        res_scale=opt['WDSR']['res_scale'], n_colors=c).to(device))
+    models[c].load_state_dict(torch.load(opt[f'C{c}_path'], map_location=lambda storage, loc: storage))
 
-if opt['pre_trained'] and os.path.exists(opt['pre_train_path']):
-    model.load_state_dict(torch.load(opt['pre_train_path'], map_location=lambda storage, loc: storage))
-    print('Pre-trained SR model is loaded.')
+criterion = torch.nn.L1Loss().to(device)
 
-avgpool = torch.nn.AvgPool2d((2, 2), stride=(2, 2))
+re_avgpool = torch.nn.AvgPool2d((2, 2), stride=(2, 2))
+
+print('Pre-trained SR model is loaded.')
+
+
+def get_ch(img: torch.Tensor, channel: int):
+    if channel == 1:
+        return img.index_select(1, torch.tensor([0])).to(device)
+    elif channel == 2:
+        return re_avgpool(img.index_select(1, torch.tensor([1, 2]))).to(device)
+    else:
+        return img.to(device)
+
+
+def single_forward(lr, *nets):
+    lrs = list()
+    for i, net in enumerate(nets):
+        lrs.append(net(get_ch(lr, i)).data.float().cpu())
+    return lrs
 
 
 def single_test(video_path):
@@ -88,15 +103,22 @@ def single_test(video_path):
     for lr in frames:
         lr_in = torch.from_numpy(np.ascontiguousarray(lr.transpose((2, 0, 1)))).float().to(device)
         # 单帧超分
-        with torch.no_grad():
-            output = model(lr_in)[0]
-        output_f = output.data.float().cpu()
-        output_f = output_f[:, hr_pad[0]:, hr_pad[1]:]
-        prediction_pool = avgpool(output_f)
-        # 给出像素
-        y = convert_channel(output_f[0, :, :])
-        u = convert_channel(prediction_pool[1, :, :])
-        v = convert_channel(prediction_pool[2, :, :])
+        if opt['channel'] == 3:
+            with torch.no_grad():
+                output = model(lr_in)[0]
+            output_f = output.data.float().cpu()
+            output_f = output_f[:, hr_pad[0]:, hr_pad[1]:]
+            prediction_pool = re_avgpool(output_f)
+            # 给出像素
+            y = convert_channel(output_f[0, :, :])
+            u = convert_channel(prediction_pool[1, :, :])
+            v = convert_channel(prediction_pool[2, :, :])
+        else:
+            with torch.no_grad():
+                y, u, v = single_forward(lr_in, models)
+            y = convert_channel(y[:, hr_pad[0]:, hr_pad[1]:])
+            u = convert_channel(u[:, hr_pad[0] // 4:, hr_pad[1] // 4:])
+            v = convert_channel(v[:, hr_pad[0] // 4:, hr_pad[1] // 4:])
         hr_frames.append(np.concatenate((y, u, v)))
 
     header[1] = b'W' + str(hr_size[1]).encode()
