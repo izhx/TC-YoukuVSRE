@@ -46,7 +46,7 @@ tb_dir = f"{opt['log_dir']}/{now.strftime('%m%d-%H%M-')}{label}/"
 
 print('===> Loading dataset')
 train_set = SISRDataset(data_dir=opt['data_dir'], augment=opt['augment'],
-                        patch_size=opt['patch_size'], v_freq=opt['vFreq'])
+                        patch_size=opt['patch_size'], v_freq=opt['vFreq'], preload=True, norm=True)
 data_loader = DataLoader(dataset=train_set, num_workers=opt['hardware']['threads'],
                          batch_size=opt['batch_size'], shuffle=True)
 eval_set = SISRDataset(data_dir=opt['eval_dir'], augment=opt['augment'],

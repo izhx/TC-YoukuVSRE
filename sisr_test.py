@@ -8,11 +8,11 @@ import glob
 import numpy as np
 
 import torch
-import torch.nn as nn
 import torch.backends.cudnn as cudnn
 
 from utils.y4m_tools import read_y4m, save_y4m
 from model.WDSR_B import MODEL
+from models.modules.RRDBNet_arch import RRDBNet
 
 # Training settings
 parser = argparse.ArgumentParser(description='PyTorch Super Res Example')
@@ -36,8 +36,13 @@ if cuda:
 device = torch.device("cuda" if cuda else "cpu")
 
 print('===> Building model')
-model = MODEL(cuda, n_res=opt['WDSR']['n_resblocks'], n_feats=opt['WDSR']['n_feats'],
-              res_scale=opt['WDSR']['res_scale']).to(device)
+if opt['model'] == 'WDSR':
+    model = MODEL(cuda, n_res=opt['WDSR']['n_resblocks'], n_feats=opt['WDSR']['n_feats'],
+                  res_scale=opt['WDSR']['res_scale']).to(device)
+elif opt['model'] == 'RRDB':
+    model = RRDBNet(3, 3, opt['RRDB']['n_feats'], opt['RRDB']['n_resblocks']).to(device)
+else:
+    model = None
 
 if opt['pre_trained'] and os.path.exists(opt['pre_train_path']):
     model.load_state_dict(torch.load(opt['pre_train_path'], map_location=lambda storage, loc: storage))
@@ -73,6 +78,8 @@ def single_test(video_path):
 
     def convert_channel(ch: torch.tensor):
         ch = ch.numpy().flatten()
+        if opt['model'] == 'RRDB':
+            ch *= 255
         ch = ch.round().astype(np.uint8)
         # Important. Unlike MATLAB, numpy.unit8() WILL NOT round by default.
         return ch

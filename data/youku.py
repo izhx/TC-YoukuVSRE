@@ -125,12 +125,13 @@ class YoukuDataset(data.Dataset):
 
 
 class SISRDataset(data.Dataset):
-    def __init__(self, data_dir, augment, patch_size, v_freq=10, preload=False):
+    def __init__(self, data_dir, augment, patch_size, v_freq=10, preload=False, norm=True):
         super(SISRDataset, self).__init__()
         self.augment = augment
         self.patch_size = patch_size
         self.data_dir = data_dir
         self.preload = preload
+        self.norm = norm
         self.paths = [v for v in glob.glob(f"{data_dir}/*_l")]
         self.data = list()
         if preload:
@@ -139,8 +140,8 @@ class SISRDataset(data.Dataset):
                 # ids = np.random.randint(0, len(frame_paths), [v_freq])
                 # lr_paths = [frame_paths[i] for i in range(len(frame_paths)) if i in ids]
                 for lrp in frame_paths:
-                    lr = np.load(lrp)
-                    gt = np.load(lrp.replace('_l', '_h_GT'))
+                    lr = read_npy(lrp, norm)
+                    gt = read_npy(lrp.replace('_l', '_h_GT'), norm)
                     vid = os.path.basename(lrp)[:11]
                     self.data.append((vid, lr, gt))
             random.shuffle(self.data)
@@ -151,8 +152,8 @@ class SISRDataset(data.Dataset):
 
     def __getitem__(self, index):
         if self.preload:
-            imgs = [self.data[index][1].astype(np.float32)]
-            hr = self.data[index][2].astype(np.float32)
+            imgs = [self.data[index][1]]
+            hr = self.data[index][2]
         else:
             frame_paths = sorted(glob.glob(f"{self.paths[index]}/*.npy"))
             # 随机抽帧
@@ -160,8 +161,8 @@ class SISRDataset(data.Dataset):
             # 取数据
             lr_path = frame_paths[lr_id]
             gt_path = f"{lr_path}".replace('_l', '_h_GT')  # 取GT
-            imgs = [np.load(lr_path).astype(np.float32)]
-            hr = np.load(gt_path).astype(np.float32)
+            imgs = [read_npy(lr_path, self.norm)]
+            hr = read_npy(gt_path, self.norm)
 
         if self.augment:
             imgs, hr, _ = augment(imgs, hr)
@@ -206,8 +207,8 @@ class ESRGANDataset(data.Dataset):
             for vd in self.paths:
                 frame_paths = sorted(glob.glob(f"{vd}/*.npy"))
                 for lrp in frame_paths:
-                    lr = np.load(lrp)
-                    gt = np.load(lrp.replace('_l', '_h_GT'))
+                    lr = read_npy(lrp)
+                    gt = read_npy(lrp.replace('_l', '_h_GT'))
                     vid = os.path.basename(lrp)[:11]
                     self.data.append((vid, lr, gt))
             random.shuffle(self.data)
@@ -228,8 +229,8 @@ class ESRGANDataset(data.Dataset):
             # 取数据
             lr_path = frame_paths[lr_id]
             gt_path = f"{lr_path}".replace('_l', '_h_GT')  # 取GT
-            imgs = [np.load(lr_path).astype(np.float32)]
-            hr = np.load(gt_path).astype(np.float32)
+            imgs = [read_npy(lr_path)]
+            hr = read_npy(gt_path)
 
         if self.augmentation:
             imgs, hr, _ = augment(imgs, hr)
@@ -268,7 +269,7 @@ class VGGDataset(data.Dataset):
         for vd in self.paths:
             frame_paths = sorted(glob.glob(f"{vd}/*.npy"))
             for lrp in frame_paths:
-                lr = np.load(lrp)
+                lr = read_npy(lrp)
                 vid = os.path.basename(lrp)[:11]
                 if vid in CARTOONS:
                     kind = 1
@@ -316,8 +317,9 @@ class Error(Exception):
     pass
 
 
-def read_npy(path):
-    return np.load(path).astype(np.float32) / 255.0
+def read_npy(path, norm=True):
+    data = np.load(path).astype(np.float32)
+    return data / 255.0 if norm else data
 
 
 def augment(lr_seq, hr, flip_h=True, rot=True):
