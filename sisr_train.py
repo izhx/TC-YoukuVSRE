@@ -69,6 +69,8 @@ optimizer = optim.Adam(model.parameters(), lr=opt['lr'])
 # optimizer = Nadam(model.parameters(), lr=0.00001)
 # optimizer = optim.SGD(model.parameters(), lr=opt['lr'], momentum=0.9, weight_decay=1e-4, nesterov=True)
 
+re_avgpool = torch.nn.AvgPool2d((2, 2), stride=(2, 2))
+
 if opt['pre_trained'] and os.path.exists(opt['pre_train_path']):
     model.load_state_dict(torch.load(opt['pre_train_path'], map_location=lambda storage, loc: storage))
     # with open(f"{opt['save_dir']}/optim.pkl", 'rb') as f:
@@ -76,13 +78,13 @@ if opt['pre_trained'] and os.path.exists(opt['pre_train_path']):
     print('Pre-trained SR model is loaded.')
 
 
-def get_ch(img):
-    if opt['channel'] == 1:
-        return img.index_select(1, torch.tensor([0]))
-    elif opt['channel'] == 2:
-        return img.index_select(1, torch.tensor([1, 2]))
-    else:
-        return img
+def get_ch(img: torch.Tensor, channel: int):
+    if channel == 0:  # Y通道
+        return img.index_select(1, torch.tensor([channel])).to(device)
+    elif channel < 3 and channel > 0:  # U和V
+        return re_avgpool(img.index_select(1, torch.tensor([channel]))).to(device)
+    elif channel == 3:  # 444
+        return img.to(device)
 
 
 def train(e):
@@ -91,8 +93,7 @@ def train(e):
     model.train()
     for batch_i, batch in enumerate(data_loader):
         t0 = time.time()
-        lr, gt = get_ch(batch[0]).to(device), get_ch(batch[1]).to(device)
-        # lr, gt = batch[0].to(device), batch[1].to(device)
+        lr, gt = get_ch(batch[0], opt['channel']), get_ch(batch[1], opt['channel'])
 
         optimizer.zero_grad()
         loss = criterion(model(lr), gt)
@@ -125,8 +126,7 @@ def eval_func(only=False):
     model.eval()
     for batch_i, batch in enumerate(eval_loader):
         t0 = time.time()
-        lr, gt = get_ch(batch[0]).to(device), get_ch(batch[1]).to(device)
-        # lr, gt = batch[0].to(device), batch[1].to(device)
+        lr, gt = get_ch(batch[0], opt['channel']).to(device), get_ch(batch[1], opt['channel']).to(device)
 
         with torch.no_grad():
             sr = model(lr)
