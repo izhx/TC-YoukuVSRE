@@ -8,6 +8,7 @@ import logging
 import pickle
 import yaml
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -69,12 +70,19 @@ def get_ch(img: torch.Tensor, channel: int):
         return img.to(device)
 
 
+def convert(img: torch.Tensor, norm=False) -> np.ndarray:
+    img = img.data.float().cpu().numpy().flatten()
+    if norm:
+        img *= 255
+    return img.round().astype(np.uint8)
+
+
 def single_forward(lr, gt, net):
     with torch.no_grad():
         hr = net(lr)
         psnr = psnr_tensor(hr, gt)
         loss = criterion(hr, gt)
-    return psnr, loss
+    return psnr, loss, hr, gt
 
 
 def eval_func():
@@ -87,10 +95,12 @@ def eval_func():
         res = list()
 
         for i in range(3):
-            psnr, loss = single_forward(get_ch(batch[0], i), get_ch(batch[1], i), models[i])
-            res.append((psnr, loss))
+            psnr, loss, hr, gt = single_forward(get_ch(batch[0], i), get_ch(batch[1], i), models[i])
+            res.append((psnr, loss, hr, gt))
 
-        _psnr = (4 * res[0][0] + res[1][0] + res[2][0]) / 6
+        hr = np.concatenate((convert(res[0][2]), convert(res[1][2]), convert(res[2][2])))
+        gt = np.concatenate((convert(res[0][3]), convert(res[1][3]), convert(res[2][3])))
+        _psnr = psnr_numpy(hr, gt)
         _loss = (4 * res[0][1].item() + res[1][1].item() + res[2][1].item()) / 6
 
         t1 = time.time()
@@ -113,6 +123,15 @@ def psnr_tensor(img1: torch.Tensor, img2: torch.Tensor):
     # img1 and img2 have range [0, 255]
     diff = img1 - img2
     mse = torch.mean(diff * diff).item()
+    if mse == 0:
+        return float('inf')
+    return 20 * math.log10(255.0 / math.sqrt(mse))
+
+
+def psnr_numpy(img1: np.ndarray, img2: np.ndarray):
+    # img1 and img2 have range [0, 255]
+    diff = img1 - img2
+    mse = np.mean(diff * diff)
     if mse == 0:
         return float('inf')
     return 20 * math.log10(255.0 / math.sqrt(mse))
