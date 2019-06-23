@@ -80,9 +80,9 @@ if opt['pre_trained'] and os.path.exists(opt['pre_train_path']):
 
 def get_ch(img: torch.Tensor, channel: int):
     if channel == 0:  # Y通道
-        return img.index_select(1, torch.tensor([channel])).to(device)
+        return img.index_select(1, torch.LongTensor([channel])).to(device)
     elif channel < 3 and channel > 0:  # U和V
-        return re_avgpool(img.index_select(1, torch.tensor([channel]))).to(device)
+        return re_avgpool(img.index_select(1, torch.LongTensor([channel]))).to(device)
     elif channel == 3:  # 444
         return img.to(device)
 

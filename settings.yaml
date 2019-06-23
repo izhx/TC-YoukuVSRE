@@ -1,33 +1,31 @@
+C0_path: /data/ex//4x_WDSR-C0-R8F64_42.pth
+C1_path: /data/ex//4x_WDSR-C1-R8F64_90.pth
+C2_path: /data/ex//4x_WDSR-C2-R8F64_60.pth
+RRDB: {n_feats: 64, n_resblocks: 23}
 WDSR: {n_feats: 64, n_resblocks: 8, res_scale: 1.0}
-RRDB:
-  n_feats: 64
-  n_resblocks: 23
 augment: true
 batch_size: 16
-data_dir: /input/train/
-eval_dir: /input/eval/
-hardware: {cuda: true, n_GPUs: 1, seed: 123, threads: 0}
-log_dir: /output
-lr: 1.0e-04
-lr_step: 30
-model: WDSR
-channel: 1
 ch0_m: [0.38824835]
 ch1_m: [0.48927346]
 ch2_m: [0.50467293]
 ch3_m: [0.38824835, 0.48927346, 0.50467293]
+channel: 1
+data_dir: /input/train/
+eval_dir: /input/eval/
+hardware: {cuda: true, n_GPUs: 1, seed: 123, threads: 0}
+log_dir: /output
+lr: 0.0001
+lr_step: 30
+model: WDSR
 nEpochs: 150
 only_eval: false
 patch_size: 256
-pre_train_path: /data/weights//4x_WDSR-R16F128_61.pth
-pre_trained: false
+pre_train_path: /data/ex//4x_WDSR-C1-R8F64_150.pth
+pre_trained: true
 result_dir: /output/result/
 save_dir: /data/ex/
 scale: 4
 snapshots: 1
-startEpoch: 1
+startEpoch: 151
 test_dir: /input/test/
 vFreq: 10
-C0_path: /data/weights//4x_WDSR-C0-R16F128_42.pth
-C1_path: /data/weights//4x_WDSR-C1-R16F128_42.pth
-C2_path: /data/weights//4x_WDSR-C2-R16F128_42.pth

@@ -40,7 +40,7 @@ model = MODEL()
 models = list()
 for c in range(3):
     models.append(MODEL(cuda, n_res=opt['WDSR']['n_resblocks'], n_feats=opt['WDSR']['n_feats'],
-                        res_scale=opt['WDSR']['res_scale'], n_colors=c, mean=opt[f'ch{c}_m']).to(device))
+                        res_scale=opt['WDSR']['res_scale'], n_colors=1, mean=opt[f'ch{c}_m']).to(device))
     models[c].load_state_dict(torch.load(opt[f'C{c}_path'], map_location=lambda storage, loc: storage))
 
 criterion = torch.nn.L1Loss().to(device)
@@ -51,18 +51,19 @@ print('Pre-trained SR model is loaded.')
 
 
 def get_ch(img: torch.Tensor, channel: int):
-    if channel == 1:
-        return img.index_select(1, torch.tensor([0])).to(device)
-    elif channel == 2:
-        return re_avgpool(img.index_select(1, torch.tensor([1, 2]))).to(device)
-    else:
+    if channel == 0:  # Y通道
+        return img.index_select(0, torch.LongTensor([channel])).to(device)
+    elif channel < 3 and channel > 0:  # U和V
+        return re_avgpool(img.index_select(0, torch.LongTensor([channel]))).to(device)
+    elif channel == 3:  # 444
         return img.to(device)
 
 
 def single_forward(lr, *nets):
     lrs = list()
     for i, net in enumerate(nets):
-        lrs.append(net(get_ch(lr, i)).data.float().cpu())
+        iin = get_ch(lr, i)
+        lrs.append(net(iin).data.float().cpu().squeeze(0))
     return lrs
 
 
@@ -101,7 +102,7 @@ def single_test(video_path):
 
     hr_frames = list()
     for lr in frames:
-        lr_in = torch.from_numpy(np.ascontiguousarray(lr.transpose((2, 0, 1)))).float().to(device)
+        lr_in = torch.from_numpy(np.ascontiguousarray(lr.transpose((2, 0, 1)))).float()
         # 单帧超分
         if opt['channel'] == 3:
             with torch.no_grad():
@@ -115,10 +116,10 @@ def single_test(video_path):
             v = convert_channel(prediction_pool[2, :, :])
         else:
             with torch.no_grad():
-                y, u, v = single_forward(lr_in, models)
+                y, u, v = single_forward(lr_in, *models)
             y = convert_channel(y[:, hr_pad[0]:, hr_pad[1]:])
-            u = convert_channel(u[:, hr_pad[0] // 4:, hr_pad[1] // 4:])
-            v = convert_channel(v[:, hr_pad[0] // 4:, hr_pad[1] // 4:])
+            u = convert_channel(u[:, hr_pad[0] // 2:, hr_pad[1] // 2:])
+            v = convert_channel(v[:, hr_pad[0] // 2:, hr_pad[1] // 2:])
         hr_frames.append(np.concatenate((y, u, v)))
 
     header[1] = b'W' + str(hr_size[1]).encode()

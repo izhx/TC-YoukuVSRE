@@ -61,11 +61,11 @@ print('Pre-trained SR model is loaded.')
 
 
 def get_ch(img: torch.Tensor, channel: int):
-    if channel == 1:
-        return img.index_select(1, torch.tensor([0])).to(device)
-    elif channel == 2:
-        return re_avgpool(img.index_select(1, torch.tensor([1, 2]))).to(device)
-    else:
+    if channel == 0:  # Y通道
+        return img.index_select(1, torch.LongTensor([channel])).to(device)
+    elif channel < 3 and channel > 0:  # U和V
+        return re_avgpool(img.index_select(1, torch.LongTensor([channel]))).to(device)
+    elif channel == 3:  # 444
         return img.to(device)
 
 
@@ -88,7 +88,6 @@ def eval_func():
 
         for i in range(3):
             psnr, loss = single_forward(get_ch(batch[0], i), get_ch(batch[1], i), models[i])
-            print()
             res.append((psnr, loss))
 
         _psnr = (4 * res[0][0] + res[1][0] + res[2][0]) / 6
@@ -99,6 +98,8 @@ def eval_func():
         avg_psnr += _psnr
 
         if batch_i % 10 == 0:
+            print(f"===> eval({batch_i}/{len(eval_loader)}): Y:{res[0][0]:.4f}, {res[1][1].item():.4f},"
+                  + f" U:{res[1][0]:.4f}, {res[1][1].item():.4f}, V:{res[2][0]:.4f}, {res[2][1].item():.4f}, .")
             print(f"===> eval({batch_i}/{len(eval_loader)}):  PSNR: {_psnr:.4f}",
                   f" Loss: {_loss:.4f} || Timer: {(t1 - t0):.4f} sec.")
 
