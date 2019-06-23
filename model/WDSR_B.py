@@ -29,8 +29,10 @@ class ResBlock(nn.Module):
 
 
 class MODEL(nn.Module):
-    def __init__(self, cuda=True, scale=4, n_res=8, n_feats=64, res_scale=1, n_colors=3,
-                 kernel_size=3, mean=(0.38824835, 0.48927346, 0.50467293)):
+    def __init__(self, cuda=True, scale=4, n_res=8, n_feats=64, res_scale=1,
+                 n_colors=3, kernel_size=3,
+                 mean=(99.00332925, 124.7647323, 128.69159715),
+                 std=(51.16912088, 9.29543705, 9.23474285)):
         super(MODEL, self).__init__()
         # hyper-params
         act = nn.ReLU(True)
@@ -41,8 +43,10 @@ class MODEL(nn.Module):
             return torch.nn.utils.weight_norm(x)
 
         self.mean = torch.FloatTensor(mean).view([1, n_colors, 1, 1])
+        self.std = torch.FloatTensor(std).view([1, n_colors, 1, 1])
         if cuda:
             self.mean = self.mean.cuda()
+            self.std = self.std.cuda()
 
         # define head module
         head = list()
@@ -83,11 +87,11 @@ class MODEL(nn.Module):
         return
 
     def forward(self, x):
-        x = (x - self.mean * 255) / 127.5
+        x = (x - self.mean) / self.std
         s = self.skip(x)
         x = self.head(x)
         x = self.body(x)
         x = self.tail(x)
         x += s
-        x = x * 127.5 + self.mean * 255
+        x = x * self.std + self.mean
         return x

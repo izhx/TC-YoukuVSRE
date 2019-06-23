@@ -46,7 +46,8 @@ tb_dir = f"{opt['log_dir']}/{now.strftime('%m%d-%H%M-')}{label}/"
 
 print('===> Loading dataset')
 train_set = SISRDataset(data_dir=opt['data_dir'], augment=opt['augment'],
-                        patch_size=opt['patch_size'], v_freq=opt['vFreq'], norm=False)
+                        patch_size=opt['patch_size'], v_freq=opt['vFreq'],
+                        preload=opt['preload'], norm=False)
 data_loader = DataLoader(dataset=train_set, num_workers=opt['hardware']['threads'],
                          batch_size=opt['batch_size'], shuffle=True)
 eval_set = SISRDataset(data_dir=opt['eval_dir'], augment=opt['augment'],
@@ -56,8 +57,14 @@ eval_loader = DataLoader(dataset=eval_set, num_workers=opt['hardware']['threads'
 
 print('===> Building model')
 if opt['model'] == 'WDSR':
-    model = MODEL(cuda, n_res=opt['WDSR']['n_resblocks'], n_feats=opt['WDSR']['n_feats'],
-                  res_scale=opt['WDSR']['res_scale'], n_colors=1, mean=opt[f'ch{opt["channel"]}_m']).to(device)
+    if opt['channel'] == 3:
+        model = MODEL(cuda, n_res=opt['WDSR']['n_resblocks'], n_feats=opt['WDSR']['n_feats'],
+                      res_scale=opt['WDSR']['res_scale'], n_colors=3,
+                      mean=opt['mean'], std=opt['std']).to(device)
+    else:
+        model = MODEL(cuda, n_res=opt['WDSR']['n_resblocks'], n_feats=opt['WDSR']['n_feats'],
+                      res_scale=opt['WDSR']['res_scale'], n_colors=1, mean=[opt['mean'][opt['channel']]],
+                      std=[opt['std'][opt['channel']]]).to(device)
 elif opt['model'] == 'RRDB':
     model = RRDBNet(3, 3, opt['RRDB']['n_feats'], opt['RRDB']['n_resblocks']).to(device)
 else:
@@ -81,7 +88,7 @@ if opt['pre_trained'] and os.path.exists(opt['pre_train_path']):
 def get_ch(img: torch.Tensor, channel: int):
     if channel == 0:  # Y通道
         return img.index_select(1, torch.LongTensor([channel])).to(device)
-    elif channel < 3 and channel > 0:  # U和V
+    elif 3 > channel > 0:  # U和V
         return re_avgpool(img.index_select(1, torch.LongTensor([channel]))).to(device)
     elif channel == 3:  # 444
         return img.to(device)
@@ -137,9 +144,9 @@ def eval_func(only=False):
         epoch_loss += loss.item()
         avg_psnr += _psnr
 
-        # if batch_i % 10 == 0:
-        #     print(f"===> eval({batch_i}/{len(eval_loader)}):  PSNR: {_psnr:.4f}",
-        #           f" Loss: {loss.item():.4f} || Timer: {(t1 - t0):.4f} sec.")
+        if batch_i % 20 == 0:
+            print(f"===> eval({batch_i}/{len(eval_loader)}):  PSNR: {_psnr:.4f}",
+                  f" Loss: {loss.item():.4f} || Timer: {(t1 - t0):.4f} sec.")
 
     avg_psnr /= len(eval_loader)
     avg_loss = epoch_loss / len(eval_loader)
@@ -160,23 +167,21 @@ def psnr_tensor(img1: torch.Tensor, img2: torch.Tensor):
 
 
 def checkpoint(comment=""):
+    global opt
     save_path = f"{opt['save_dir']}/{opt['scale']}x_{comment}_{epoch}.pth"
     torch.save(model.state_dict(), save_path)
+
+    with open(args.yaml_path, 'r') as f:
+        opt = yaml.load(f)
+
     opt['pre_train_path'] = save_path
     opt['pre_trained'] = True
     opt['startEpoch'] = epoch + 1
-    with open(f"{opt['save_dir']}/optim.pkl", 'wb') as f:
-        pickle.dump(optimizer, f)
+    # with open(f"{opt['save_dir']}/optim.pkl", 'wb') as f:
+    #     pickle.dump(optimizer, f)
     with open(args.yaml_path, 'w') as f:
         f.write(yaml.dump(opt))
     print(f"Checkpoint saved to {save_path}")
-
-
-def adjust_learning_rate(optimizer, epoch):
-    """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
-    lr = args.lr * (0.1 ** (epoch // 30))
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
 
 
 doEval = opt['only_eval']
@@ -189,7 +194,7 @@ else:
         if (epoch + 1) % opt['snapshots'] == 0:
             checkpoint(label)
             eval_func()
-        if (epoch + 1) % opt['lr_step'] == 0:
+        if (epoch + 1) in opt['lr_step']:
             for param_group in optimizer.param_groups:
                 param_group['lr'] /= 10.0
 

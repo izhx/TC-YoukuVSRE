@@ -125,13 +125,18 @@ class YoukuDataset(data.Dataset):
 
 
 class SISRDataset(data.Dataset):
-    def __init__(self, data_dir, augment, patch_size, v_freq=10, preload=False, norm=True):
+    MEAN = np.array([99.00332925, 124.7647323, 128.69159715])
+    STD = np.array([51.16912088, 9.29543705, 9.23474285])
+
+    def __init__(self, data_dir, augment, patch_size, v_freq=10, preload=False,
+                 norm=False, rgb=False):
         super(SISRDataset, self).__init__()
         self.augment = augment
         self.patch_size = patch_size
         self.data_dir = data_dir
         self.preload = preload
         self.norm = norm
+        self.rgb = rgb
         self.paths = [v for v in glob.glob(f"{data_dir}/*_l")]
         self.data = list()
         if preload:
@@ -140,8 +145,8 @@ class SISRDataset(data.Dataset):
                 # ids = np.random.randint(0, len(frame_paths), [v_freq])
                 # lr_paths = [frame_paths[i] for i in range(len(frame_paths)) if i in ids]
                 for lrp in frame_paths:
-                    lr = read_npy(lrp, norm)
-                    gt = read_npy(lrp.replace('_l', '_h_GT'), norm)
+                    lr = np.load(lrp)
+                    gt = np.load(lrp.replace('_l', '_h_GT'))
                     vid = os.path.basename(lrp)[:11]
                     self.data.append((vid, lr, gt))
             random.shuffle(self.data)
@@ -161,8 +166,8 @@ class SISRDataset(data.Dataset):
             # 取数据
             lr_path = frame_paths[lr_id]
             gt_path = f"{lr_path}".replace('_l', '_h_GT')  # 取GT
-            imgs = [read_npy(lr_path, self.norm)]
-            hr = read_npy(gt_path, self.norm)
+            imgs = [np.load(lr_path)]
+            hr = np.load(gt_path)
 
         if self.augment:
             imgs, hr, _ = augment(imgs, hr)
@@ -171,6 +176,13 @@ class SISRDataset(data.Dataset):
             imgs, hr = get_patch(imgs, hr, self.patch_size)
 
         lr = imgs[0]
+
+        # 归一化等
+        if self.norm:
+            lr = (lr.astypr(np.float32) - self.MEAN) / self.STD
+        if self.rgb:
+            pass
+
         # to tensor
         lr = torch.from_numpy(np.ascontiguousarray(lr.transpose((2, 0, 1)))).float()
         gt = torch.from_numpy(np.ascontiguousarray(hr.transpose((2, 0, 1)))).float()
@@ -319,7 +331,7 @@ class Error(Exception):
 
 def read_npy(path, norm=True):
     data = np.load(path).astype(np.float32)
-    return data / 255.0 if norm else data
+    return data / 255.0 if norm == True else data
 
 
 def augment(lr_seq, hr, flip_h=True, rot=True):

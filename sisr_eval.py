@@ -48,11 +48,19 @@ eval_loader = DataLoader(dataset=eval_set, num_workers=opt['hardware']['threads'
                          shuffle=True)
 
 print('===> Building model')
+model = MODEL(cuda, n_res=opt['WDSR']['n_resblocks'], n_feats=opt['WDSR']['n_feats'],
+              res_scale=opt['WDSR']['res_scale'], n_colors=3, mean=opt['mean'],
+              std=opt['std']).to(device)
 models = list()
-for i in range(3):
-    models.append(MODEL(cuda, n_res=opt['WDSR']['n_resblocks'], n_feats=opt['WDSR']['n_feats'],
-                        res_scale=opt['WDSR']['res_scale'], n_colors=1, mean=opt[f'ch{i}_m']).to(device))
-    models[i].load_state_dict(torch.load(opt[f'C{i}_path'], map_location=lambda storage, loc: storage))
+if opt['channel'] == 3:
+    model.load_state_dict(torch.load(opt['pre_train_path'], map_location=lambda storage, loc: storage))
+else:
+    for c in range(3):
+        models.append(MODEL(cuda, n_res=opt['WDSR']['n_resblocks'], n_feats=opt['WDSR']['n_feats'],
+                            res_scale=opt['WDSR']['res_scale'], n_colors=1,
+                            mean=[opt['mean'][opt['channel']]],
+                            std=[opt['std'][opt['channel']]]).to(device))
+        models[c].load_state_dict(torch.load(opt[f'C{c}_path'], map_location=lambda storage, loc: storage))
 
 criterion = nn.L1Loss().to(device)
 
@@ -88,20 +96,30 @@ def single_forward(lr, gt, net):
 def eval_func():
     epoch_loss = 0
     avg_psnr = 0
-    for model in models:
+    if opt['channel'] == 3:
         model.eval()
+    else:
+        for i in range(3):
+            models[i].eval()
+
     for batch_i, batch in enumerate(eval_loader):
         t0 = time.time()
         res = list()
 
-        for i in range(3):
-            psnr, loss, hr, gt = single_forward(get_ch(batch[0], i), get_ch(batch[1], i), models[i])
-            res.append((psnr, loss, hr, gt))
-
-        hr = np.concatenate((convert(res[0][2]), convert(res[1][2]), convert(res[2][2])))
-        gt = np.concatenate((convert(res[0][3]), convert(res[1][3]), convert(res[2][3])))
-        _psnr = psnr_numpy(hr, gt)
-        _loss = (4 * res[0][1].item() + res[1][1].item() + res[2][1].item()) / 6
+        if opt['channel'] == 3:
+            lr, gt = batch[0].to(device), batch[1].to(device)
+            with torch.no_grad():
+                hr = model(lr)
+                _psnr = psnr_tensor(hr, gt)
+                _loss = criterion(hr, gt)
+        else:
+            for i in range(3):
+                psnr, loss, hr, gt = single_forward(get_ch(batch[0], i), get_ch(batch[1], i), models[i])
+                res.append((psnr, loss, hr, gt))
+            hr = np.concatenate((convert(res[0][2]), convert(res[1][2]), convert(res[2][2])))
+            gt = np.concatenate((convert(res[0][3]), convert(res[1][3]), convert(res[2][3])))
+            _psnr = psnr_numpy(hr, gt)
+            _loss = (4 * res[0][1].item() + res[1][1].item() + res[2][1].item()) / 6
 
         t1 = time.time()
         epoch_loss += _loss
@@ -130,7 +148,7 @@ def psnr_tensor(img1: torch.Tensor, img2: torch.Tensor):
 
 def psnr_numpy(img1: np.ndarray, img2: np.ndarray):
     # img1 and img2 have range [0, 255]
-    diff = img1 - img2
+    diff = (img1 - img2).astype(np.float32)
     mse = np.mean(diff * diff)
     if mse == 0:
         return float('inf')
