@@ -65,13 +65,13 @@ class VGGFeatureExtractor(nn.Module):
         super(VGGFeatureExtractor, self).__init__()
         self.use_input_norm = use_input_norm
         if use_bn:
-            model = torchvision.models.vgg19_bn(pretrained=False)
+            model = torchvision.models.vgg19_bn(pretrained=True)
         else:
-            model = torchvision.models.vgg19()
-            model.load_state_dict(torch.load(pretrain_path, map_location=lambda storage, loc: storage))
+            model = torchvision.models.vgg19(pretrained=True)
+            # model.load_state_dict(torch.load(pretrain_path, map_location=lambda storage, loc: storage))
 
         if self.use_input_norm:
-            mean = torch.Tensor([0.38824835, 0.48927346, 0.50467293]).view(1, 3, 1, 1).to(device)
+            mean = torch.Tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1).to(device)
             # [0.485 - 1, 0.456 - 1, 0.406 - 1] if input in range [-1, 1]  0.485, 0.456, 0.406
             std = torch.Tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1).to(device)
             # [0.229 * 2, 0.224 * 2, 0.225 * 2] if input in range [-1, 1]
