@@ -6,7 +6,6 @@ WDSR: {n_feats: 64, n_resblocks: 8, res_scale: 1.0}
 augment: true
 batch_size: 8
 mean: [99.00332925, 124.7647323, 128.69159715]
-std: [51.16912088, 9.29543705, 9.23474285]
 channel: 3
 data_dir: /input/train/
 eval_dir: /input/eval/

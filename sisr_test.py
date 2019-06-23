@@ -37,8 +37,7 @@ device = torch.device("cuda" if cuda else "cpu")
 
 print('===> Building model')
 model = MODEL(cuda, n_res=opt['WDSR']['n_resblocks'], n_feats=opt['WDSR']['n_feats'],
-              res_scale=opt['WDSR']['res_scale'], n_colors=3, mean=opt['mean'],
-              std=opt['std']).to(device)
+              res_scale=opt['WDSR']['res_scale'], n_colors=3, mean=opt['mean']).to(device)
 models = list()
 if opt['channel'] == 3:
     model.load_state_dict(torch.load(opt['pre_train_path'], map_location=lambda storage, loc: storage))
@@ -46,8 +45,7 @@ else:
     for c in range(3):
         models.append(MODEL(cuda, n_res=opt['WDSR']['n_resblocks'], n_feats=opt['WDSR']['n_feats'],
                             res_scale=opt['WDSR']['res_scale'], n_colors=1,
-                            mean=[opt['mean'][opt['channel']]],
-                            std=[opt['std'][opt['channel']]]).to(device))
+                            mean=[opt['mean'][opt['channel']]]).to(device))
         models[c].load_state_dict(torch.load(opt[f'C{c}_path'], map_location=lambda storage, loc: storage))
 
 criterion = torch.nn.L1Loss().to(device)
@@ -70,7 +68,7 @@ def single_forward(lr, *nets):
     lrs = list()
     for i, net in enumerate(nets):
         iin = get_ch(lr, i)
-        lrs.append(net(iin).data.float().cpu().squeeze(0))
+        lrs.append(net(iin).data.cpu().squeeze(0))
     return lrs
 
 

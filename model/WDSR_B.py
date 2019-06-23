@@ -87,11 +87,11 @@ class MODEL(nn.Module):
         return
 
     def forward(self, x):
-        x = (x - self.mean) / self.std
+        x = (x - self.mean) / 127.5
         s = self.skip(x)
         x = self.head(x)
         x = self.body(x)
         x = self.tail(x)
         x += s
-        x = x * self.std + self.mean
+        x = x * 127.5 + self.mean * 255
         return x

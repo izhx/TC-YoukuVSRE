@@ -8,6 +8,10 @@ import logging
 import pickle
 import yaml
 
+import cv2 as cv
+import numpy as np
+from skimage.measure.simple_metrics import compare_psnr
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -60,11 +64,11 @@ if opt['model'] == 'WDSR':
     if opt['channel'] == 3:
         model = MODEL(cuda, n_res=opt['WDSR']['n_resblocks'], n_feats=opt['WDSR']['n_feats'],
                       res_scale=opt['WDSR']['res_scale'], n_colors=3,
-                      mean=opt['mean'], std=opt['std']).to(device)
+                      mean=opt['mean']).to(device)
     else:
         model = MODEL(cuda, n_res=opt['WDSR']['n_resblocks'], n_feats=opt['WDSR']['n_feats'],
-                      res_scale=opt['WDSR']['res_scale'], n_colors=1, mean=[opt['mean'][opt['channel']]],
-                      std=[opt['std'][opt['channel']]]).to(device)
+                      res_scale=opt['WDSR']['res_scale'],
+                      n_colors=1, mean=[opt['mean'][opt['channel']]]).to(device)
 elif opt['model'] == 'RRDB':
     model = RRDBNet(3, 3, opt['RRDB']['n_feats'], opt['RRDB']['n_resblocks']).to(device)
 else:
@@ -92,6 +96,16 @@ def get_ch(img: torch.Tensor, channel: int):
         return re_avgpool(img.index_select(1, torch.LongTensor([channel]))).to(device)
     elif channel == 3:  # 444
         return img.to(device)
+
+
+def out_rgb(img, path):
+    img = img.cpu().squeeze(0).numpy().astype(np.uint8)
+    if opt['channel'] < 3:
+        img = img[0]
+    elif opt['rgb'] == False:
+        img = cv.cvtColor(img, cv.COLOR_YUV2RGB)
+    cv.imwrite(path, img)
+    return
 
 
 def train(e):
@@ -125,7 +139,7 @@ def train(e):
     return
 
 
-def eval_func(only=False):
+def eval_func(e, only=False):
     epoch_loss = 0
     avg_psnr = 0
     if opt['pre_trained'] and only:
@@ -145,6 +159,9 @@ def eval_func(only=False):
         avg_psnr += _psnr
 
         if batch_i % 20 == 0:
+            out_rgb(lr, f"./test/{opt['channel']}_{e}_{batch_i}_lr.png")
+            out_rgb(sr, f"./test/{opt['channel']}_{e}_{batch_i}_sr.png")
+            out_rgb(gt, f"./test/{opt['channel']}_{e}_{batch_i}_gt.png")
             print(f"===> eval({batch_i}/{len(eval_loader)}):  PSNR: {_psnr:.4f}",
                   f" Loss: {loss.item():.4f} || Timer: {(t1 - t0):.4f} sec.")
 
@@ -163,7 +180,7 @@ def psnr_tensor(img1: torch.Tensor, img2: torch.Tensor):
     mse = torch.mean(diff * diff).item()
     if mse == 0:
         return float('inf')
-    return 20 * math.log10(255.0 / math.sqrt(mse))
+    return 10 * math.log10(65025.0 / mse)
 
 
 def checkpoint(comment=""):
@@ -187,13 +204,13 @@ def checkpoint(comment=""):
 doEval = opt['only_eval']
 
 if doEval:
-    eval_func(opt['only_eval'])
+    eval_func(-1, opt['only_eval'])
 else:
     for epoch in range(opt['startEpoch'], opt['nEpochs'] + 1):
         train(epoch)
         if (epoch + 1) % opt['snapshots'] == 0:
             checkpoint(label)
-            eval_func()
+            eval_func(epoch)
         if (epoch + 1) in opt['lr_step']:
             for param_group in optimizer.param_groups:
                 param_group['lr'] /= 10.0
