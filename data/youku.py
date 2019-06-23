@@ -206,19 +206,20 @@ class ESRGANDataset(data.Dataset):
     def __init__(self, opt, preload=False):
         super(ESRGANDataset, self).__init__()
         self.opt = opt
-        data_dir = opt['data_dir']
         self.scale = opt['scale']
         self.augmentation = opt['augmentation']
         self.patch_size = opt['patch_size']
         self.data_dir = opt['data_dir']
         self.preload = preload
         v_freq = opt['v_freq'] if opt['v_freq'] else 10
-        self.paths = [v for v in glob.glob(f"{data_dir}/*_l")]
+        self.paths = [v for v in glob.glob(f"{self.data_dir}/*_l")]
         self.data = list()
         if preload:
             for vd in self.paths:
                 frame_paths = sorted(glob.glob(f"{vd}/*.npy"))
-                for lrp in frame_paths:
+                ids = np.random.randint(0, len(frame_paths), [v_freq])
+                lr_paths = [frame_paths[i] for i in range(len(frame_paths)) if i in ids]
+                for lrp in lr_paths:
                     lr = read_npy(lrp)
                     gt = read_npy(lrp.replace('_l', '_h_GT'))
                     vid = os.path.basename(lrp)[:11]
@@ -251,6 +252,11 @@ class ESRGANDataset(data.Dataset):
             imgs, hr = get_patch(imgs, hr, self.patch_size)
 
         lr = imgs[0]
+
+        if self.opt['color'] == 'RGB':
+            lr = cv2.cvtColor(lr, cv2.COLOR_YUV2RGB)
+            hr = cv2.cvtColor(hr, cv2.COLOR_YUV2RGB)
+
         # to tensor
         lr = torch.from_numpy(np.ascontiguousarray(lr.transpose((2, 0, 1)))).float()
         gt = torch.from_numpy(np.ascontiguousarray(hr.transpose((2, 0, 1)))).float()

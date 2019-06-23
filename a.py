@@ -4,7 +4,7 @@ import numpy as np
 from utils.y4m_tools import read_y4m
 from data.info_list import CARTOONS
 
-from data.youku import SISRDataset
+from data.youku import ESRGANDataset
 
 
 def main(dir):
@@ -80,9 +80,17 @@ if __name__ == '__main__':
     #             os.remove(fp.replace('_l', '_h_GT'))
     #         else:
     #             print(fp)
-    stat_info()
-    # yk = SISRDataset(DIR, augment=True, patch_size=128, v_freq=5, preload=True)
-    # yk.__getitem__(0)
+    # stat_info()
+    cfg = {'data_dir': DIR,
+           'scale': 4,
+           'v_freq': 5,
+           'n_workers': 6,  # per GPU
+           'batch_size': 16,
+           'patch_size': 256,
+           'augmentation': True,
+           'color': 'RGB'}
+    yk = ESRGANDataset(cfg)
+    yk.__getitem__(0)
     # test()
     main(DIR)
     pass
