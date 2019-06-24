@@ -11,6 +11,7 @@ dataset/
 *.y4m
 *.npy
 *.png
+*.yuv
 
 # vscode
 .vscode

@@ -27,7 +27,6 @@ def read_y4m(file_path, mode="444"):
     start_y, end_y = (0, n_pixel)
     start_u, end_u = (n_pixel, n_pixel + (n_pixel >> 2))
     start_v, end_v = (n_pixel + (n_pixel >> 2), n_pixel + (n_pixel >> 1))
-    frames = list()
 
     def extend_uv(c: np.ndarray) -> np.ndarray:
         cc = c.repeat(2)
@@ -35,17 +34,19 @@ def read_y4m(file_path, mode="444"):
         c4 = np.hsplit(cc_cc, c.shape[0])
         return np.vstack(c4)
 
-    def make_frame(yc, uc, vc):
+    def make_frame(frame):
         if mode == "444":
-            uc, vc = extend_uv(uc), extend_uv(vc)
-            return np.array([yc, uc, vc]).transpose((1, 2, 0))
-        return
+            y = np.array((frame[:end_y]), dtype=np.uint8).reshape(height, width)
+            u = np.array(frame[start_u:end_u], dtype=np.uint8).reshape(uvh, uvw)
+            v = np.array(frame[start_v:end_v], dtype=np.uint8).reshape(uvh, uvw)
+            u, v = extend_uv(u), extend_uv(v)
+            return np.array([y, u, v]).transpose((1, 2, 0))
+        elif mode == '420p':
+            return np.array(frame, dtype=np.uint8)
+        else:
+            raise NotImplementedError("不支持的模式！")
 
-    for frame in yuv_frames:
-        y = np.array((frame[:end_y]), dtype=np.uint8).reshape(height, width)
-        u = np.array(frame[start_u:end_u], dtype=np.uint8).reshape(uvh, uvw)
-        v = np.array(frame[start_v:end_v], dtype=np.uint8).reshape(uvh, uvw)
-        frames.append(make_frame(y, u, v))
+    frames = [make_frame(f) for f in yuv_frames]
 
     del raw_frames, yuv_frames
     gc.collect()
@@ -116,6 +117,18 @@ def save_y4m(yuv420p_imgs, header, save_path):
         v.write(header)
         for frame in yuv420p_imgs:
             v.write(b'FRAME\n')
+            v.write(frame.tostring())
+    return
+
+
+def save_yuv(imgs, save_path):
+    """
+    :param imgs: 图片s
+    :param save_path: 存储路径
+    :return:
+    """
+    with open(save_path, 'wb') as v:
+        for frame in imgs:
             v.write(frame.tostring())
     return
 
