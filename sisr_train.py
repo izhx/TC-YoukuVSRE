@@ -10,7 +10,7 @@ import yaml
 
 import cv2 as cv
 import numpy as np
-from skimage.measure.simple_metrics import compare_psnr
+# from skimage.measure.simple_metrics import compare_psnr
 
 import torch
 import torch.nn as nn
@@ -20,7 +20,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 from data.youku import SISRDataset
-from model.WDSR_B import MODEL
+from model.WDSR_A import MODEL
 from models.modules.RRDBNet_arch import RRDBNet
 
 # Training settings
@@ -63,7 +63,7 @@ print('===> Building model')
 if opt['model'] == 'WDSR':
     if opt['channel'] == 3:
         model = MODEL(cuda, n_res=opt['WDSR']['n_resblocks'], n_feats=opt['WDSR']['n_feats'],
-                      res_scale=opt['WDSR']['res_scale'], n_colors=3,
+                      res_scale=opt['WDSR']['res_scale'], n_colors=3, block_feats=opt['WDSR']['block_feats'],
                       mean=opt['mean']).to(device)
     else:
         model = MODEL(cuda, n_res=opt['WDSR']['n_resblocks'], n_feats=opt['WDSR']['n_feats'],

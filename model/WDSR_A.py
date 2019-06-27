@@ -4,21 +4,17 @@ import torch.nn.init as init
 from torch.autograd import Variable
 
 
-class ResBlock(nn.Module):
-    def __init__(
-            self, n_feats, kernel_size, wn, act=nn.ReLU(True), res_scale=1):
-        super(ResBlock, self).__init__()
+class Block(nn.Module):
+    def __init__(self, n_feats, kernel_size, block_feats, wn, act=nn.ReLU(True),
+                 res_scale=1):
+        super(Block, self).__init__()
         self.res_scale = res_scale
         body = list()
-        expand = 6  # todo
-        linear = 0.8  # todo
         body.append(
-            wn(nn.Conv2d(n_feats, n_feats * expand, 1, padding=1 // 2)))
+            wn(nn.Conv2d(n_feats, block_feats, kernel_size, padding=kernel_size // 2)))
         body.append(act)
         body.append(
-            wn(nn.Conv2d(n_feats * expand, int(n_feats * linear), 1, padding=1 // 2)))
-        body.append(
-            wn(nn.Conv2d(int(n_feats * linear), n_feats, kernel_size, padding=kernel_size // 2)))
+            wn(nn.Conv2d(block_feats, n_feats, kernel_size, padding=kernel_size // 2)))
 
         self.body = nn.Sequential(*body)
 
@@ -29,24 +25,19 @@ class ResBlock(nn.Module):
 
 
 class MODEL(nn.Module):
-    def __init__(self, cuda=True, scale=4, n_res=8, n_feats=64, res_scale=1,
-                 n_colors=3, kernel_size=3,
-                 mean=(99.00332925, 124.7647323, 128.69159715),
-                 std=(51.16912088, 9.29543705, 9.23474285)):
+    def __init__(self, cuda=True, scale=4, n_res=8, n_feats=64, block_feats=8,
+                 res_scale=1, n_colors=3, kernel_size=3,
+                 mean=(99.00332925, 124.7647323, 128.69159715)):
         super(MODEL, self).__init__()
         # hyper-params
         act = nn.ReLU(True)
 
-        # wn = lambda x: x
-        # wn = lambda x: torch.nn.utils.weight_norm(x)
         def wn(x):
             return torch.nn.utils.weight_norm(x)
 
         self.mean = torch.FloatTensor(mean).view([1, n_colors, 1, 1])
-        self.std = torch.FloatTensor(std).view([1, n_colors, 1, 1])
         if cuda:
             self.mean = self.mean.cuda()
-            self.std = self.std.cuda()
 
         # define head module
         head = list()
@@ -55,7 +46,7 @@ class MODEL(nn.Module):
         # define body module
         body = list()
         for i in range(n_res):
-            body.append(ResBlock(n_feats, kernel_size, wn, act, res_scale))
+            body.append(Block(n_feats, kernel_size, block_feats, wn, act, res_scale))
 
         # define tail module
         tail = list()
