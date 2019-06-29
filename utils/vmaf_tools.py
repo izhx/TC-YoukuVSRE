@@ -208,12 +208,14 @@ def PSNR_VMAF(srs: list, gts: list, height=1920, width=1080, fmt='yuv420p', pool
 
 
 if __name__ == '__main__':
-    ref_p = 'C:/Users/z/Desktop/contrast/Youku_00183_h_GT.y4m'
-    dis_p = 'C:/Users/z/Desktop/contrast/Youku_00183_h_Res.y4m'
+    ref_p = 'C:/Users/z/Desktop/contrast/Youku_00182_h_GT.y4m'
+    dis_p = 'C:/Users/z/Desktop/contrast/Youku_00182_h_Res.y4m'
     ref, _ = read_y4m(ref_p, mode='420p')
     dis, _ = read_y4m(dis_p, mode='420p')
     res = compute_score(dis, ref)
     print(str(res))
+    print(res['aggregate']['PSNR_score'] * 0.8 + res['aggregate']['VMAF_score'] * 0.2)
+    print(0)
 
 '''
 依赖库：

@@ -4,7 +4,7 @@ import numpy as np
 from utils.y4m_tools import read_y4m
 from data.info_list import CARTOONS
 
-from data.youku import ESRGANDataset
+from data.youku import SISRDataset
 
 
 def main(dir):
@@ -71,6 +71,19 @@ def stat_info():
 if __name__ == '__main__':
     DIR = r"D:/DATA/train"
 
+    import SimpleITK as sitk
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    image = sitk.ReadImage('C:/users/z/desktop/628127.mhd')
+    image = sitk.GetArrayFromImage(image)
+    image = np.squeeze(image[7, ...])  # if the image is 3d, the slice is integer
+    plt.imshow(image, cmap='gray')
+    plt.axis('off')
+    plt.show()
+
+
+
     # ds = glob.glob(f"{DIR}/*_l")
     # for dp in ds:
     #     fpl = glob.glob(f'{dp}/*.npy')
@@ -89,7 +102,7 @@ if __name__ == '__main__':
            'patch_size': 256,
            'augmentation': True,
            'color': 'RGB'}
-    yk = ESRGANDataset(cfg)
+    yk = SISRDataset(DIR, True, 256, rgb=True)
     yk.__getitem__(0)
     # test()
     main(DIR)

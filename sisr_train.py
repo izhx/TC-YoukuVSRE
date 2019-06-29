@@ -99,7 +99,7 @@ def get_ch(img: torch.Tensor, channel: int):
 
 
 def out_rgb(img, path):
-    img = img.cpu().squeeze(0).numpy().astype(np.uint8)
+    img = img.cpu().squeeze(0).numpy().astype(np.uint8).transpose((1,2,0))
     if opt['channel'] < 3:
         img = img[0]
     elif opt['rgb'] == False:
@@ -159,9 +159,9 @@ def eval_func(e, only=False):
         avg_psnr += _psnr
 
         if batch_i % 20 == 0:
-            out_rgb(lr, f"./test/{opt['channel']}_{e}_{batch_i}_lr.png")
-            out_rgb(sr, f"./test/{opt['channel']}_{e}_{batch_i}_sr.png")
-            out_rgb(gt, f"./test/{opt['channel']}_{e}_{batch_i}_gt.png")
+            out_rgb(lr, f"/data/evi/{opt['channel']}_{e}_{batch_i}_lr.png")
+            out_rgb(sr, f"/data/evi/{opt['channel']}_{e}_{batch_i}_sr.png")
+            out_rgb(gt, f"/data/evi/{opt['channel']}_{e}_{batch_i}_gt.png")
             print(f"===> eval({batch_i}/{len(eval_loader)}):  PSNR: {_psnr:.4f}",
                   f" Loss: {loss.item():.4f} || Timer: {(t1 - t0):.4f} sec.")
 
