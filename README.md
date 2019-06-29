@@ -11,7 +11,7 @@
 
 EDVR、WDSR的model architecture来自[EDVR](https://github.com/xinntao/EDVR)和[wdsr_ntire2018](https://github.com/JiahuiYu/wdsr_ntire2018)，自己写了训练代码。ESRGAN代码全部来自[BasicSR](https://github.com/xinntao/BasicSR)，不得不说大佬所有东西都手写，代码很健壮，造轮子精神可嘉。
 
-自己配置了VMAF并且封装了函数，在`utils/vmaf_tools.py`中。
+自己配置了Netflix的[vmaf](https://github.com/Netflix/vmaf)并且封装了函数，在`utils/vmaf_tools.py`中。
 
 ## 文件结构
 ```
